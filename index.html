@@ -164,7 +164,7 @@ body {
     min-height: 0;
 }
 
-/* Tiles */
+/* Tiles grid */
 #tilesArea {
     width: 100%;
     height: 100%;
@@ -681,12 +681,13 @@ function updateLastUpdate() {
 }
 
 /* ===== GLOBAL STATE ===== */
-const SETTINGS_KEY = "abstruseDashboardSettings_v3";
+const SETTINGS_KEY = "abstruseDashboardSettings_v4";
 const SETTINGS_PIN = "6251";
 const API_KEY = "ce57b328ddd2af95c06b77dc11a49bf6";
 
 let lastLat = null;
 let lastLon = null;
+let gpsTried = false;
 
 let radarMap = null;
 let radarBaseLayer = null;
@@ -788,6 +789,7 @@ const defaultState = {
 
 let state = null;
 
+/* ===== STATE LOAD/SAVE ===== */
 function loadState() {
     try {
         const raw = localStorage.getItem(SETTINGS_KEY);
@@ -836,11 +838,11 @@ function openSettingsModal() {
     document.getElementById("settingIcsRaw").value = state.icsRaw || "";
 
     document.getElementById("visibleSchedule").checked = !!state.tiles.schedule.enabled;
-    document.getElementById("visibleCam1").checked = !!state.tiles.cam1.enabled;
-    document.getElementById("visibleCam2").checked = !!state.tiles.cam2.enabled;
-    document.getElementById("visibleCam3").checked = !!state.tiles.cam3.enabled;
-    document.getElementById("visibleRadar").checked = !!state.tiles.radar.enabled;
-    document.getElementById("visibleSpeed").checked = !!state.tiles.speed.enabled;
+    document.getElementById("visibleCam1").checked     = !!state.tiles.cam1.enabled;
+    document.getElementById("visibleCam2").checked     = !!state.tiles.cam2.enabled;
+    document.getElementById("visibleCam3").checked     = !!state.tiles.cam3.enabled;
+    document.getElementById("visibleRadar").checked    = !!state.tiles.radar.enabled;
+    document.getElementById("visibleSpeed").checked    = !!state.tiles.speed.enabled;
 
     document.getElementById("lockTiles").checked = !!state.lockTiles;
 
@@ -884,9 +886,7 @@ function applyGlobalState() {
     renderTiles();
 }
 
-/* ===== WEATHER + GPS (prompt once per session) ===== */
-let gpsTried = false;
-
+/* ===== WEATHER + GPS (prompt once) ===== */
 async function ensureLocationAndWeather() {
     if (!gpsTried && lastLat === null && lastLon === null && navigator.geolocation) {
         gpsTried = true;
@@ -898,7 +898,6 @@ async function ensureLocationAndWeather() {
             },
             (err) => {
                 console.warn("GPS denied or failed, using default coords", err);
-                // Rocky Top-ish fallback
                 lastLat = 36.03;
                 lastLon = -84.15;
                 fetchWeather();
@@ -1256,6 +1255,25 @@ async function runSpeedTestForTile() {
     }
 }
 
+/* ===== CAMERA STREAM URL BUILDER (your working path) ===== */
+function buildCamStreamUrl(base, user, pass) {
+    try {
+        let u = new URL(base);
+
+        // All cams: /cgi-bin/mjpg/video.cgi?channel=1&subtype=1
+        u.pathname = "/cgi-bin/mjpg/video.cgi";
+        u.search = "channel=1&subtype=1&t=" + Date.now();
+
+        if (user) u.username = user;
+        if (pass) u.password = pass;
+
+        return u.toString();
+    } catch (e) {
+        console.error("Camera URL build error", e);
+        return base;
+    }
+}
+
 /* ===== TILE RENDERING ===== */
 function getEnabledTilesSorted() {
     return Object.values(state.tiles)
@@ -1301,7 +1319,25 @@ function renderTiles() {
         if (t.type === "cam") {
             const img = document.createElement("img");
             img.alt = t.label;
-            img.src = t.config.url || "";
+
+            const streamUrl = buildCamStreamUrl(
+                t.config.url,
+                t.config.username,
+                t.config.password
+            );
+
+            img.src = streamUrl;
+            img.style.objectFit = "cover";
+
+            // Periodic refresh in case MJPEG stalls
+            setInterval(() => {
+                img.src = buildCamStreamUrl(
+                    t.config.url,
+                    t.config.username,
+                    t.config.password
+                );
+            }, 20000);
+
             tile.appendChild(img);
         } else if (t.type === "schedule") {
             const sched = document.createElement("div");
@@ -1329,7 +1365,7 @@ function renderTiles() {
                         <div class="speedValue speedDownVal statusWarn">-- Mbps</div>
                     </div>
                 </div>
-                <button class="speedButton">Run Speed & Ping</button>
+                <button class="speedButton">Run Speed &amp; Ping</button>
             `;
             tile.appendChild(sp);
             sp.querySelector(".speedButton").addEventListener("click", () => {
@@ -1377,7 +1413,7 @@ function buildTileSettingsHtml(tileConfig) {
             <h4>${tileConfig.label} Settings</h4>
             ${common}
             <div class="tileSettingsRow">
-                <label>Stream URL
+                <label>Base URL
                     <input type="text" class="ts-cam-url" value="${tileConfig.config.url || ""}">
                 </label>
             </div>
@@ -1507,33 +1543,25 @@ function openTileSettings(tileId) {
             const userEl = panel.querySelector(".ts-cam-user");
             const passEl = panel.querySelector(".ts-cam-pass");
 
-            let url = urlEl.value.trim() || cfg.config.url || "";
-            const u = userEl.value.trim();
-            const p = passEl.value;
-            if (url && u) {
-                try {
-                    const uobj = new URL(url);
-                    uobj.username = u;
-                    if (p) uobj.password = p;
-                    url = uobj.toString();
-                } catch (e) {
-                    console.error("Bad URL", e);
-                }
-            }
+            const testStream = buildCamStreamUrl(
+                urlEl.value.trim(),
+                userEl.value.trim(),
+                passEl.value
+            );
 
             const testImg = new Image();
             let done = false;
             testImg.onload = () => {
                 if (done) return;
                 done = true;
-                alert("Stream is responding (at least as an image).");
+                alert("Stream OK — camera responded successfully!");
             };
             testImg.onerror = () => {
                 if (done) return;
                 done = true;
-                alert("Failed to load stream. Check URL / credentials / camera path.");
+                alert("Stream FAILED — check URL, username, or password/path.");
             };
-            testImg.src = url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+            testImg.src = testStream;
         };
     }
 
