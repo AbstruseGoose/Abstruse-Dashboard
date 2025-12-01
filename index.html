@@ -379,6 +379,58 @@ body {
 .statusWarn { color: #ffc107; }
 .statusBad  { color: #ff5252; }
 
+/* Camera Discovery tile */
+.camDiscoverTile {
+    position: absolute;
+    inset: 0;
+    padding: 10px 10px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+}
+.camDiscoverStatus {
+    font-size: 12px;
+    color: var(--text-soft);
+}
+.camDiscoverFound {
+    flex: 1;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.5);
+    position: relative;
+}
+.camDiscoverFound img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.camDiscoverMeta {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    font-size: 11px;
+    background: rgba(0,0,0,0.7);
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+.camDiscoverBtnRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.camDiscoverBtnRow button {
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.7);
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 12px;
+}
+
 /* Bottom bar */
 #bottomBar {
     margin: 2px 14px 14px;
@@ -463,7 +515,7 @@ body {
 #settingsModal.open { display: flex; }
 
 .settingsContent {
-    width: 460px;
+    width: 480px;
     max-width: calc(100% - 40px);
     padding: 18px 20px 16px;
     border-radius: 16px;
@@ -631,12 +683,19 @@ body {
                 <label><input type="checkbox" id="visibleCam3"> Cam 3</label>
                 <label><input type="checkbox" id="visibleRadar"> Live Radar</label>
                 <label><input type="checkbox" id="visibleSpeed"> Speed / Ping</label>
+                <label><input type="checkbox" id="visibleCameraDiscovery"> Camera Discovery</label>
             </div>
         </div>
 
         <div class="settingsGroup">
             <label><input type="checkbox" id="lockTiles"> Lock all tile editing</label>
             <div class="settingsHint">When locked, long-press editing and tile settings menus are disabled.</div>
+        </div>
+
+        <div class="settingsGroup">
+            <label for="settingCamScanSubnet">Camera scan subnet prefix</label>
+            <input id="settingCamScanSubnet" type="text" placeholder="192.168.1." />
+            <div class="settingsHint">Example: <code>192.168.1.</code> (will scan .1–.254).</div>
         </div>
 
         <div class="settingsGroup">
@@ -681,7 +740,7 @@ function updateLastUpdate() {
 }
 
 /* ===== GLOBAL STATE ===== */
-const SETTINGS_KEY = "abstruseDashboardSettings_v4";
+const SETTINGS_KEY = "abstruseDashboardSettings_v5";
 const SETTINGS_PIN = "6251";
 const API_KEY = "ce57b328ddd2af95c06b77dc11a49bf6";
 
@@ -701,6 +760,7 @@ const defaultState = {
     nodeName: "Abstruse Trailer NOC",
     lockTiles: false,
     icsRaw: "",
+    cameraScanSubnetPrefix: "192.168.1.",
     tiles: {
         schedule: {
             id: "schedule",
@@ -768,7 +828,7 @@ const defaultState = {
                 animSpeedMs: 700,
                 opacity: 0.7,
                 gpsLock: true,
-                baseLayer: "dark"  // dark / light / osm
+                baseLayer: "dark"
             }
         },
         speed: {
@@ -782,6 +842,20 @@ const defaultState = {
                 speedUrl: "https://www.abstrusenetworks.com/speedtest.bin",
                 pingTarget: "https://dns.google/resolve?name=google.com",
                 autoIntervalSec: 120
+            }
+        },
+        cameraDiscovery: {
+            id: "cameraDiscovery",
+            type: "camAuto",
+            label: "Camera Discovery",
+            enabled: true,
+            order: 7,
+            size: "small",
+            config: {
+                discoveredIp: "",
+                discoveredPath: "",
+                username: "",
+                password: ""
             }
         }
     }
@@ -800,6 +874,9 @@ function loadState() {
         if (parsed.nodeName) merged.nodeName = parsed.nodeName;
         if (typeof parsed.lockTiles === "boolean") merged.lockTiles = parsed.lockTiles;
         if (typeof parsed.icsRaw === "string") merged.icsRaw = parsed.icsRaw;
+        if (typeof parsed.cameraScanSubnetPrefix === "string") {
+            merged.cameraScanSubnetPrefix = parsed.cameraScanSubnetPrefix;
+        }
 
         if (parsed.tiles) {
             for (const k in merged.tiles) {
@@ -836,13 +913,16 @@ const settingsCancelBtn = document.getElementById("settingsCancelBtn");
 function openSettingsModal() {
     document.getElementById("settingNodeName").value = state.nodeName;
     document.getElementById("settingIcsRaw").value = state.icsRaw || "";
+    document.getElementById("settingCamScanSubnet").value =
+        state.cameraScanSubnetPrefix || "192.168.1.";
 
-    document.getElementById("visibleSchedule").checked = !!state.tiles.schedule.enabled;
-    document.getElementById("visibleCam1").checked     = !!state.tiles.cam1.enabled;
-    document.getElementById("visibleCam2").checked     = !!state.tiles.cam2.enabled;
-    document.getElementById("visibleCam3").checked     = !!state.tiles.cam3.enabled;
-    document.getElementById("visibleRadar").checked    = !!state.tiles.radar.enabled;
-    document.getElementById("visibleSpeed").checked    = !!state.tiles.speed.enabled;
+    document.getElementById("visibleSchedule").checked        = !!state.tiles.schedule.enabled;
+    document.getElementById("visibleCam1").checked            = !!state.tiles.cam1.enabled;
+    document.getElementById("visibleCam2").checked            = !!state.tiles.cam2.enabled;
+    document.getElementById("visibleCam3").checked            = !!state.tiles.cam3.enabled;
+    document.getElementById("visibleRadar").checked           = !!state.tiles.radar.enabled;
+    document.getElementById("visibleSpeed").checked           = !!state.tiles.speed.enabled;
+    document.getElementById("visibleCameraDiscovery").checked = !!state.tiles.cameraDiscovery.enabled;
 
     document.getElementById("lockTiles").checked = !!state.lockTiles;
 
@@ -866,12 +946,16 @@ settingsSaveBtn.addEventListener("click", () => {
     state.nodeName = document.getElementById("settingNodeName").value.trim() || defaultState.nodeName;
     state.icsRaw = document.getElementById("settingIcsRaw").value || "";
 
-    state.tiles.schedule.enabled = document.getElementById("visibleSchedule").checked;
-    state.tiles.cam1.enabled     = document.getElementById("visibleCam1").checked;
-    state.tiles.cam2.enabled     = document.getElementById("visibleCam2").checked;
-    state.tiles.cam3.enabled     = document.getElementById("visibleCam3").checked;
-    state.tiles.radar.enabled    = document.getElementById("visibleRadar").checked;
-    state.tiles.speed.enabled    = document.getElementById("visibleSpeed").checked;
+    state.cameraScanSubnetPrefix =
+        (document.getElementById("settingCamScanSubnet").value || "").trim() || "192.168.1.";
+
+    state.tiles.schedule.enabled        = document.getElementById("visibleSchedule").checked;
+    state.tiles.cam1.enabled            = document.getElementById("visibleCam1").checked;
+    state.tiles.cam2.enabled            = document.getElementById("visibleCam2").checked;
+    state.tiles.cam3.enabled            = document.getElementById("visibleCam3").checked;
+    state.tiles.radar.enabled           = document.getElementById("visibleRadar").checked;
+    state.tiles.speed.enabled           = document.getElementById("visibleSpeed").checked;
+    state.tiles.cameraDiscovery.enabled = document.getElementById("visibleCameraDiscovery").checked;
 
     state.lockTiles = document.getElementById("lockTiles").checked;
 
@@ -886,7 +970,7 @@ function applyGlobalState() {
     renderTiles();
 }
 
-/* ===== WEATHER + GPS (prompt once) ===== */
+/* ===== WEATHER + GPS ===== */
 async function ensureLocationAndWeather() {
     if (!gpsTried && lastLat === null && lastLon === null && navigator.geolocation) {
         gpsTried = true;
@@ -1099,7 +1183,6 @@ async function initRadarMap() {
     const lon = (lastLon != null && cfg.gpsLock) ? lastLon : -84.15;
     radarMap.setView([lat, lon], 8);
 
-    // Base map layer
     if (radarBaseLayer) {
         radarMap.removeLayer(radarBaseLayer);
         radarBaseLayer = null;
@@ -1117,7 +1200,6 @@ async function initRadarMap() {
             { maxZoom: 18 }
         ).addTo(radarMap);
     } else {
-        // dark
         radarBaseLayer = L.tileLayer(
             "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
             { maxZoom: 18 }
@@ -1255,23 +1337,138 @@ async function runSpeedTestForTile() {
     }
 }
 
-/* ===== CAMERA STREAM URL BUILDER (your working path) ===== */
+/* ===== CAMERA STREAM URL BUILDER (known MJPEG path) ===== */
 function buildCamStreamUrl(base, user, pass) {
     try {
         let u = new URL(base);
-
-        // All cams: /cgi-bin/mjpg/video.cgi?channel=1&subtype=1
         u.pathname = "/cgi-bin/mjpg/video.cgi";
         u.search = "channel=1&subtype=1&t=" + Date.now();
-
         if (user) u.username = user;
         if (pass) u.password = pass;
-
         return u.toString();
     } catch (e) {
         console.error("Camera URL build error", e);
         return base;
     }
+}
+
+/* ===== CAMERA DISCOVERY SUPPORT ===== */
+function probeImage(url, timeoutMs = 2000) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        let done = false;
+        const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            resolve(false);
+        }, timeoutMs);
+        img.onload = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            resolve(true);
+        };
+        img.onerror = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            resolve(false);
+        };
+        img.src = url;
+    });
+}
+
+async function runCameraDiscovery(tileEl) {
+    const statusEl = tileEl.querySelector(".camDiscoverStatus");
+    const foundContainer = tileEl.querySelector(".camDiscoverFound");
+    const metaEl = tileEl.querySelector(".camDiscoverMeta");
+    const imgEl = tileEl.querySelector(".camDiscoverImg");
+
+    const subnet = state.cameraScanSubnetPrefix || "192.168.1.";
+    statusEl.textContent = "Scanning subnet " + subnet + "1–254 for cameras...";
+    foundContainer.style.background = "rgba(0,0,0,0.5)";
+    imgEl.style.display = "none";
+    metaEl.textContent = "Scanning...";
+
+    const paths = [
+        "/cgi-bin/mjpg/video.cgi?channel=1&subtype=1",
+        "/cgi-bin/mjpg/video.cgi?channel=0&subtype=1",
+        "/mjpeg",
+        "/mjpegstream",
+        "/video.mjpeg",
+        "/cgi-bin/video.cgi",
+        "/cgi-bin/stream",
+        "/snapshot.jpg",
+        "/image.jpg",
+        "/cgi-bin/snapshot.cgi"
+    ];
+
+    const creds = [
+        { user: "",       pass: "" },
+        { user: "admin",  pass: "admin" },
+        { user: "admin",  pass: "" },
+        { user: "admin",  pass: "12345" },
+        { user: "user",   pass: "user" },
+        { user: "root",   pass: "root" }
+    ];
+
+    let found = null;
+
+    outer:
+    for (let host = 1; host <= 254; host++) {
+        const ip = subnet + host;
+        statusEl.textContent = "Testing " + ip + "...";
+        for (const path of paths) {
+            for (const c of creds) {
+                try {
+                    const base = "http://" + ip;
+                    let u = new URL(base);
+                    u.pathname = path.split("?")[0];
+                    const existingSearch = path.includes("?") ? path.split("?")[1] : "";
+                    const ts = "t=" + Date.now();
+                    u.search = existingSearch ? (existingSearch + "&" + ts) : ts;
+                    if (c.user) u.username = c.user;
+                    if (c.pass) u.password = c.pass;
+                    const testUrl = u.toString();
+
+                    const ok = await probeImage(testUrl, 1400);
+                    if (ok) {
+                        found = {
+                            ip,
+                            path,
+                            username: c.user,
+                            password: c.pass,
+                            streamUrl: testUrl
+                        };
+                        break outer;
+                    }
+                } catch (e) {
+                    console.error("Probe error", e);
+                }
+            }
+        }
+    }
+
+    if (!found) {
+        statusEl.textContent = "Scan complete — no cameras found on " + subnet + "1–254.";
+        imgEl.style.display = "none";
+        metaEl.textContent = "No match.";
+        return;
+    }
+
+    // Save discovery
+    const cfg = state.tiles.cameraDiscovery.config;
+    cfg.discoveredIp = found.ip;
+    cfg.discoveredPath = found.path;
+    cfg.username = found.username;
+    cfg.password = found.password;
+    saveState();
+
+    statusEl.textContent = "Camera found at " + found.ip;
+    imgEl.src = found.streamUrl;
+    imgEl.style.display = "block";
+    metaEl.textContent = found.ip + " " + found.path +
+        (found.username ? (" [" + found.username + "]") : "");
 }
 
 /* ===== TILE RENDERING ===== */
@@ -1290,7 +1487,7 @@ function renderTiles() {
         const empty = document.createElement("div");
         empty.className = "scheduleEmpty glass";
         empty.style.padding = "12px 14px";
-        empty.textContent = "No tiles enabled. Open settings to enable schedule, cameras, radar, or speed tile.";
+        empty.textContent = "No tiles enabled. Open settings to enable schedule, cameras, radar, speed, or Camera Discovery.";
         container.appendChild(empty);
         return;
     }
@@ -1319,17 +1516,14 @@ function renderTiles() {
         if (t.type === "cam") {
             const img = document.createElement("img");
             img.alt = t.label;
-
             const streamUrl = buildCamStreamUrl(
                 t.config.url,
                 t.config.username,
                 t.config.password
             );
-
             img.src = streamUrl;
             img.style.objectFit = "cover";
 
-            // Periodic refresh in case MJPEG stalls
             setInterval(() => {
                 img.src = buildCamStreamUrl(
                     t.config.url,
@@ -1371,6 +1565,74 @@ function renderTiles() {
             sp.querySelector(".speedButton").addEventListener("click", () => {
                 runPingForTile();
                 runSpeedTestForTile();
+            });
+        } else if (t.type === "camAuto") {
+            const cfg = t.config;
+            const cd = document.createElement("div");
+            cd.className = "camDiscoverTile";
+            cd.innerHTML = `
+                <div class="camDiscoverStatus">Idle. Subnet: ${state.cameraScanSubnetPrefix || "192.168.1."}</div>
+                <div class="camDiscoverFound">
+                    <img class="camDiscoverImg" style="display:none;" alt="Discovered camera">
+                    <div class="camDiscoverMeta">No camera discovered yet.</div>
+                </div>
+                <div class="camDiscoverBtnRow">
+                    <button class="camDiscoverScanBtn">Scan for Cameras</button>
+                    <button class="camDiscoverUseBtn">Apply to Cam 1</button>
+                </div>
+            `;
+            tile.appendChild(cd);
+
+            const statusEl = cd.querySelector(".camDiscoverStatus");
+            const imgEl = cd.querySelector(".camDiscoverImg");
+            const metaEl = cd.querySelector(".camDiscoverMeta");
+            const scanBtn = cd.querySelector(".camDiscoverScanBtn");
+            const useBtn = cd.querySelector(".camDiscoverUseBtn");
+
+            // If we already discovered one earlier, show it
+            if (cfg.discoveredIp && cfg.discoveredPath) {
+                try {
+                    const base = "http://" + cfg.discoveredIp;
+                    let u = new URL(base);
+                    u.pathname = cfg.discoveredPath.split("?")[0];
+                    const existingSearch = cfg.discoveredPath.includes("?")
+                        ? cfg.discoveredPath.split("?")[1]
+                        : "";
+                    const ts = "t=" + Date.now();
+                    u.search = existingSearch ? (existingSearch + "&" + ts) : ts;
+                    if (cfg.username) u.username = cfg.username;
+                    if (cfg.password) u.password = cfg.password;
+                    const url = u.toString();
+                    imgEl.src = url;
+                    imgEl.style.display = "block";
+                    metaEl.textContent = cfg.discoveredIp + " " + cfg.discoveredPath +
+                        (cfg.username ? (" [" + cfg.username + "]") : "");
+                    statusEl.textContent = "Previously discovered camera.";
+                } catch (e) {
+                    console.error("Error rebuilding discovered stream", e);
+                }
+            }
+
+            scanBtn.addEventListener("click", async () => {
+                scanBtn.disabled = true;
+                useBtn.disabled = true;
+                await runCameraDiscovery(tile);
+                scanBtn.disabled = false;
+                useBtn.disabled = false;
+            });
+
+            useBtn.addEventListener("click", () => {
+                if (!cfg.discoveredIp || !cfg.discoveredPath) {
+                    alert("No discovered camera to apply yet. Run a scan first.");
+                    return;
+                }
+                const cam1 = state.tiles.cam1;
+                cam1.config.url = "http://" + cfg.discoveredIp;
+                cam1.config.username = cfg.username || "";
+                cam1.config.password = cfg.password || "";
+                saveState();
+                alert("Applied discovered camera to Cam 1 tile.");
+                applyGlobalState();
             });
         }
 
@@ -1501,6 +1763,31 @@ function buildTileSettingsHtml(tileConfig) {
                 <button class="ts-save">Save</button>
             </div>
         `;
+    } else if (tileConfig.type === "camAuto") {
+        return `
+            <h4>${tileConfig.label} Settings</h4>
+            ${common}
+            <div class="tileSettingsRow">
+                <label>Discovered IP
+                    <input type="text" class="ts-disc-ip" value="${tileConfig.config.discoveredIp || ""}">
+                </label>
+                <label>Path
+                    <input type="text" class="ts-disc-path" value="${tileConfig.config.discoveredPath || ""}">
+                </label>
+            </div>
+            <div class="tileSettingsRow">
+                <label>User
+                    <input type="text" class="ts-disc-user" value="${tileConfig.config.username || ""}">
+                </label>
+                <label>Pass
+                    <input type="password" class="ts-disc-pass" value="${tileConfig.config.password || ""}">
+                </label>
+            </div>
+            <div class="tileSettingsButtons">
+                <button class="ts-reset">Reset</button>
+                <button class="ts-save">Save</button>
+            </div>
+        `;
     } else {
         return `
             <h4>${tileConfig.label} Settings</h4>
@@ -1601,6 +1888,11 @@ function openTileSettings(tileId) {
             cfg.config.speedUrl = sUrl.trim() || defaultState.tiles.speed.config.speedUrl;
             cfg.config.pingTarget = pUrl.trim() || defaultState.tiles.speed.config.pingTarget;
             cfg.config.autoIntervalSec = isNaN(iv) ? 120 : iv;
+        } else if (cfg.type === "camAuto") {
+            cfg.config.discoveredIp = panel.querySelector(".ts-disc-ip")?.value.trim() || "";
+            cfg.config.discoveredPath = panel.querySelector(".ts-disc-path")?.value.trim() || "";
+            cfg.config.username = panel.querySelector(".ts-disc-user")?.value.trim() || "";
+            cfg.config.password = panel.querySelector(".ts-disc-pass")?.value || "";
         }
 
         saveState();
@@ -1738,7 +2030,6 @@ applyGlobalState();
 loadScheduleIntoDOM();
 setInterval(loadScheduleIntoDOM, 1000 * 60 * 15);
 
-// Auto speedtest interval if tile is enabled
 if (state.tiles.speed.enabled) {
     setInterval(() => {
         if (!state.tiles.speed.enabled) return;
