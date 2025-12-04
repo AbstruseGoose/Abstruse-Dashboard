@@ -21,7 +21,9 @@
   <link rel="stylesheet" href="css/theme.css" />
 </head>
 <body>
-  <div id="canvas"></div>
+
+  <!-- Dashboard mount point -->
+  <div id="dashboard"></div>
 
   <!-- Edit bar (shown only in edit mode) -->
   <div id="editBar">
@@ -29,8 +31,7 @@
     <button id="editDoneBtn" class="editBarBtn">Done</button>
     <button id="editTileManagerBtn" class="editBarBtn">Tile Manager</button>
   </div>
-<script type="module" src="js/registry.js"></script>
- </div>
+
   <!-- Tile Manager overlay -->
   <div id="tileManagerOverlay" class="tm-overlay hidden">
     <div class="tm-panel">
@@ -60,6 +61,8 @@
     </div>
   </div>
 
+  <!-- Load registry AFTER everything -->
   <script type="module" src="js/registry.js"></script>
+
 </body>
 </html>
