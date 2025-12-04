@@ -1,468 +1,215 @@
-// js/core/engine.js
-const STORAGE_KEY = "abstruse_dashboard_modular_v1";
-const EDIT_LONGPRESS_MS = 700;
+/* =====================================================================
+   ABSTRUSE DASHBOARD — CORE ENGINE
+   Tile rendering, grid layout, edit mode, tile manager control,
+   and safe compatibility with dynamic async tile loading.
+   ===================================================================== */
 
-let tileTypes = {};
-let state = null;
-let editMode = false;
+import { loadState, saveState } from "./state.js";
+import { renderTileManager } from "./tileManager.js";
 
-const canvas = document.getElementById("canvas");
-const editBar = document.getElementById("editBar");
-const editDoneBtn = document.getElementById("editDoneBtn");
-const editTileManagerBtn = document.getElementById("editTileManagerBtn");
+/* =====================================================================
+   START DASHBOARD (MAIN ENTRY POINT)
+   ===================================================================== */
 
-const tmOverlay = document.getElementById("tileManagerOverlay");
-const tmCloseBtn = document.getElementById("tmCloseBtn");
-const tmActiveList = document.getElementById("tmActiveList");
-const tmAvailableList = document.getElementById("tmAvailableList");
-const tmIcsTextarea = document.getElementById("tmIcsTextarea");
-const tmSaveIcsBtn = document.getElementById("tmSaveIcsBtn");
+export async function startDashboard({ tileTypes, defaultLayout }) {
+  console.log("%cAbstruse Dashboard Engine Starting…", "color:#7cf");
 
-export function initDashboard(allTileTypes, defaultLayout) {
-  tileTypes = allTileTypes;
-  state = loadState(defaultLayout);
-  renderAllTiles();
-  setupEditModeHandlers();
-  setupTileManagerHandlers();
-}
+  // Load saved layout (or default if none)
+  const layout = loadState(defaultLayout);
 
-/* --- State persistence --- */
-function loadState(defaultLayout) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        icsRaw: "",
-        tiles: defaultLayout.map((t, idx) => ({
-          instanceId: t.instanceId || `${t.typeId}-${idx + 1}`,
-          typeId: t.typeId,
-          label: t.label || tileTypes[t.typeId]?.label || t.typeId,
-          colSpan: t.colSpan || 1,
-          rowSpan: t.rowSpan || 1,
-          order: t.order ?? idx + 1,
-          config: tileTypes[t.typeId]?.createInitialConfig
-            ? tileTypes[t.typeId].createInitialConfig()
-            : {}
-        }))
-      };
+  // Lock flag
+  let editMode = false;
+
+  // Dashboard root
+  const root = document.getElementById("dashboard");
+  root.classList.add("dashboard-grid");
+
+  /* ---------------------------------------------------------
+     INIT GRID SYSTEM
+     (basic CSS grid, tile objects manage their own space)
+     --------------------------------------------------------- */
+
+  function applyGrid() {
+    root.style.gridTemplateColumns = `repeat(${layout.extras.gridCols}, 1fr)`;
+    root.style.gridAutoRows = "140px";
+    root.style.gap = layout.extras.tilePadding + "px";
+  }
+
+  applyGrid();
+
+  /* ---------------------------------------------------------
+     RENDER ALL TILES
+     --------------------------------------------------------- */
+
+  function renderAllTiles() {
+    root.innerHTML = "";
+
+    layout.tiles
+      .filter(t => t.enabled)
+      .sort((a, b) => a.order - b.order)
+      .forEach(tileData => {
+        renderTile(tileData);
+      });
+  }
+
+  /* ---------------------------------------------------------
+     RENDER SINGLE TILE
+     --------------------------------------------------------- */
+
+  function renderTile(tileData) {
+    const tileConfig = tileTypes[tileData.type];
+
+    if (!tileConfig || typeof tileConfig.render !== "function") {
+      console.warn("⚠ Tile config missing or faulty:", tileData.type);
+      return;
     }
-    const parsed = JSON.parse(raw);
-    // Backfill labels and defaults
-    parsed.tiles.forEach(tile => {
-      const def = tileTypes[tile.typeId];
-      if (def) {
-        tile.label = tile.label || def.label;
-        if (!tile.colSpan) tile.colSpan = def.defaultSize?.colSpan || 1;
-        if (!tile.rowSpan) tile.rowSpan = def.defaultSize?.rowSpan || 1;
-        tile.config = { ...(def.createInitialConfig?.() || {}), ...(tile.config || {}) };
-      }
-    });
-    return parsed;
-  } catch (e) {
-    console.error("State load error", e);
-    return {
-      icsRaw: "",
-      tiles: defaultLayout
-    };
-  }
-}
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error("State save error", e);
-  }
-}
-
-/* --- Public helpers for other modules --- */
-export function getDashboardState() {
-  return state;
-}
-export function setDashboardState(newState) {
-  state = newState;
-  saveState();
-  renderAllTiles();
-}
-export function rerenderTilesOfType(typeId) {
-  // just re-render all tiles for simplicity
-  renderAllTiles();
-}
-
-/* --- Rendering --- */
-function sortTiles() {
-  state.tiles.sort((a, b) => a.order - b.order);
-}
-function renderAllTiles() {
-  canvas.innerHTML = "";
-  sortTiles();
-
-  state.tiles.forEach(tileCfg => {
-    const def = tileTypes[tileCfg.typeId];
-    if (!def) return;
 
     const tile = document.createElement("div");
     tile.className = "tile";
-    tile.dataset.instanceId = tileCfg.instanceId;
-    tile.style.gridColumn = `span ${tileCfg.colSpan}`;
-    tile.style.gridRow = `span ${tileCfg.rowSpan}`;
+    tile.dataset.id = tileData.id;
 
-    const editChrome = document.createElement("div");
-    editChrome.className = "tileEditChrome";
-    tile.appendChild(editChrome);
+    // Apply grid size
+    tile.style.gridColumn = `span ${tileData.colSpan}`;
+    tile.style.gridRow = `span ${tileData.rowSpan}`;
 
-    const dragHandle = document.createElement("div");
-    dragHandle.className = "dragHandle";
-    tile.appendChild(dragHandle);
+    // Tile container
+    const tileBody = document.createElement("div");
+    tileBody.className = "tile-body";
 
-    const resizeHandle = document.createElement("div");
-    resizeHandle.className = "resizeHandle";
-    tile.appendChild(resizeHandle);
+    tile.appendChild(tileBody);
+    root.appendChild(tile);
 
-    const gearBtn = document.createElement("button");
-    gearBtn.className = "tileGearBtn";
-    gearBtn.textContent = "⚙";
-    tile.appendChild(gearBtn);
-
-    const content = document.createElement("div");
-    content.className = "tileContent";
-    tile.appendChild(content);
-
-    const header = document.createElement("div");
-    header.className = "tileLabel";
-    header.innerHTML = `<span>${tileCfg.label}</span>`;
-    content.appendChild(header);
-
-    const innerHost = document.createElement("div");
-    innerHost.className = "tileInner";
-    innerHost.style.flex = "1";
-    innerHost.style.display = "flex";
-    innerHost.style.flexDirection = "column";
-    content.appendChild(innerHost);
-
-    // tile-specific render
-    def.render(innerHost, tileCfg, { state });
-
-    // per-tile settings panel (gear opens it)
-    const settingsPanel = document.createElement("div");
-    settingsPanel.className = "tileSettingsPanel";
-    tile.appendChild(settingsPanel);
-
-    // Insert "Remove tile" button + Save/Close into each setting panel,
-    // tile module fills the custom config part.
-    const baseSettingsHeader = document.createElement("div");
-    baseSettingsHeader.innerHTML = `
-      <div class="ts-row">
-        <label>Label
-          <input type="text" class="ts-label-input" value="${tileCfg.label}">
-        </label>
-      </div>
-      <div class="ts-buttons">
-        <button class="ts-delete">Delete</button>
-        <div>
-          <button class="ts-close">Close</button>
-          <button class="ts-save">Save</button>
+    // Render tile content
+    try {
+      tileConfig.render(tileBody, tileData.config || {});
+    } catch (err) {
+      console.error("Tile render error:", tileData.type, err);
+      tileBody.innerHTML = `
+        <div style="color:#f66;padding:10px;">
+          <b>Error rendering tile:</b> ${tileData.type}
         </div>
-      </div>
-    `;
+      `;
+    }
 
-    // A container for tile-specific config
-    const customConfigHost = document.createElement("div");
-    customConfigHost.className = "ts-custom";
-    settingsPanel.appendChild(customConfigHost);
-    def.buildSettingsUI?.(customConfigHost, tileCfg, { state });
+    // Interaction (drag/resize) only in edit mode
+    if (editMode) enableTileEditing(tile, tileData);
+  }
 
-    settingsPanel.appendChild(baseSettingsHeader);
+  /* ---------------------------------------------------------
+     ENABLE TILE DRAG + RESIZE
+     (simple, stable, non-crashing)
+     --------------------------------------------------------- */
 
-    gearBtn.addEventListener("click", e => {
+  function enableTileEditing(tile, tileData) {
+    tile.classList.add("tile-edit");
+
+    let startX, startY, startW, startH;
+
+    // Resize handle
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    tile.appendChild(handle);
+
+    handle.addEventListener("pointerdown", e => {
       e.stopPropagation();
-      if (!editMode) return;
-      settingsPanel.style.display =
-        settingsPanel.style.display === "none" || !settingsPanel.style.display
-          ? "block"
-          : "none";
-    });
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = tileData.colSpan;
+      startH = tileData.rowSpan;
 
-    const deleteBtn = settingsPanel.querySelector(".ts-delete");
-    const saveBtn = settingsPanel.querySelector(".ts-save");
-    const closeBtn = settingsPanel.querySelector(".ts-close");
-    const labelInput = settingsPanel.querySelector(".ts-label-input");
+      function move(ev) {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
 
-    deleteBtn.addEventListener("click", () => {
-      if (!confirm("Remove this tile?")) return;
-      state.tiles = state.tiles.filter(t => t.instanceId !== tileCfg.instanceId);
-      saveState();
-      renderAllTiles();
-    });
+        const gridW = Math.max(1, Math.round(startW + dx / 140));
+        const gridH = Math.max(1, Math.round(startH + dy / 140));
 
-    saveBtn.addEventListener("click", () => {
-      tileCfg.label = labelInput.value.trim() || tileCfg.label;
-      def.saveConfig?.(customConfigHost, tileCfg, { state });
-      saveState();
-      settingsPanel.style.display = "none";
-      renderAllTiles();
-    });
+        tile.style.gridColumn = `span ${gridW}`;
+        tile.style.gridRow = `span ${gridH}`;
 
-    closeBtn.addEventListener("click", () => {
-      settingsPanel.style.display = "none";
-    });
-
-    canvas.appendChild(tile);
-
-    // drag / resize
-    setupTileDrag(tile, dragHandle, tileCfg);
-    setupTileResize(tile, resizeHandle, tileCfg);
-  });
-
-  applyEditModeVisuals();
-}
-
-/* --- Edit mode / long press on empty space --- */
-function setupEditModeHandlers() {
-  editDoneBtn.addEventListener("click", () => setEditMode(false));
-  editTileManagerBtn.addEventListener("click", () => openTileManager());
-  tmCloseBtn.addEventListener("click", () => closeTileManager());
-
-  let longPressTimer = null;
-
-  function startPress(e) {
-    if (e.target !== canvas) return;
-    if (longPressTimer) clearTimeout(longPressTimer);
-    longPressTimer = setTimeout(() => {
-      setEditMode(true);
-      longPressTimer = null;
-    }, EDIT_LONGPRESS_MS);
-  }
-  function endPress() {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  }
-
-  canvas.addEventListener("pointerdown", startPress);
-  canvas.addEventListener("pointerup", endPress);
-  canvas.addEventListener("pointerleave", endPress);
-}
-
-function setEditMode(on) {
-  editMode = on;
-  applyEditModeVisuals();
-}
-function applyEditModeVisuals() {
-  const tiles = document.querySelectorAll(".tile");
-  tiles.forEach(t => {
-    if (editMode) t.classList.add("editModeActive");
-    else t.classList.remove("editModeActive");
-  });
-  if (editMode) editBar.classList.add("visible");
-  else editBar.classList.remove("visible");
-}
-
-/* --- Drag + reorder --- */
-function setupTileDrag(tileEl, dragHandle, tileCfg) {
-  let dragging = false;
-  let startX = 0;
-  let startY = 0;
-
-  function onPointerDown(e) {
-    if (!editMode) return;
-    if (e.target !== dragHandle) return;
-    e.preventDefault();
-    dragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    tileEl.style.zIndex = 10;
-    tileEl.style.transition = "none";
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  }
-
-  function onPointerMove(e) {
-    if (!dragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    tileEl.style.transform = `translate(${dx}px, ${dy}px)`;
-  }
-
-  function onPointerUp() {
-    if (!dragging) return;
-    dragging = false;
-    tileEl.style.zIndex = "";
-    tileEl.style.transition = "";
-
-    const rect = tileEl.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-
-    let closest = null;
-    let closestDist = Infinity;
-    const tilesDom = Array.from(canvas.querySelectorAll(".tile"));
-    tilesDom.forEach(domTile => {
-      if (domTile === tileEl) return;
-      const r = domTile.getBoundingClientRect();
-      const tx = r.left + r.width / 2;
-      const ty = r.top + r.height / 2;
-      const d = (tx - cx) ** 2 + (ty - cy) ** 2;
-      if (d < closestDist) {
-        closestDist = d;
-        closest = domTile;
+        tileData.colSpan = gridW;
+        tileData.rowSpan = gridH;
       }
-    });
 
-    tileEl.style.transform = "";
-    if (closest) {
-      const otherId = closest.dataset.instanceId;
-      const otherTile = state.tiles.find(t => t.instanceId === otherId);
-      if (otherTile) {
-        const tmp = tileCfg.order;
-        tileCfg.order = otherTile.order;
-        otherTile.order = tmp;
-        saveState();
-        renderAllTiles();
+      function up() {
+        saveState(layout);
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
       }
-    }
 
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-  }
-
-  dragHandle.addEventListener("pointerdown", onPointerDown);
-}
-
-/* --- Resize (grid-span based) --- */
-function setupTileResize(tileEl, resizeHandle, tileCfg) {
-  let resizing = false;
-  let startX = 0;
-  let startY = 0;
-  let startColSpan = tileCfg.colSpan;
-  let startRowSpan = tileCfg.rowSpan;
-
-  function onPointerDown(e) {
-    if (!editMode) return;
-    e.preventDefault();
-    resizing = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startColSpan = tileCfg.colSpan;
-    startRowSpan = tileCfg.rowSpan;
-    tileEl.style.transition = "none";
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  }
-
-  function onPointerMove(e) {
-    if (!resizing) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    const canvasWidth = canvas.clientWidth;
-    const colCount = getComputedStyle(canvas).gridTemplateColumns.split(" ").length;
-    const colWidth = (canvasWidth - (colCount - 1) * 10) / colCount;
-    const rowHeight = parseFloat(getComputedStyle(canvas).gridAutoRows);
-
-    let newColSpan = Math.max(1, Math.round(startColSpan + dx / colWidth));
-    let newRowSpan = Math.max(1, Math.round(startRowSpan + dy / rowHeight));
-
-    newColSpan = Math.min(Math.max(1, newColSpan), colCount);
-    newRowSpan = Math.min(Math.max(1, newRowSpan), 4);
-
-    tileCfg.colSpan = newColSpan;
-    tileCfg.rowSpan = newRowSpan;
-    tileEl.style.gridColumn = "span " + newColSpan;
-    tileEl.style.gridRow = "span " + newRowSpan;
-  }
-
-  function onPointerUp() {
-    if (!resizing) return;
-    resizing = false;
-    tileEl.style.transition = "";
-    saveState();
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-  }
-
-  resizeHandle.addEventListener("pointerdown", onPointerDown);
-}
-
-/* --- Tile Manager UI --- */
-function setupTileManagerHandlers() {
-  editTileManagerBtn.addEventListener("click", openTileManager);
-  tmCloseBtn.addEventListener("click", closeTileManager);
-  tmSaveIcsBtn.addEventListener("click", () => {
-    state.icsRaw = tmIcsTextarea.value;
-    saveState();
-    closeTileManager();
-  });
-}
-
-function openTileManager() {
-  updateTileManagerLists();
-  tmIcsTextarea.value = state.icsRaw || "";
-  tmOverlay.classList.remove("hidden");
-}
-function closeTileManager() {
-  tmOverlay.classList.add("hidden");
-}
-
-function updateTileManagerLists() {
-  tmActiveList.innerHTML = "";
-  tmAvailableList.innerHTML = "";
-
-  const activeTypes = new Set(state.tiles.map(t => t.typeId));
-
-  // active
-  state.tiles.forEach(tile => {
-    const def = tileTypes[tile.typeId];
-    if (!def) return;
-    const chip = document.createElement("div");
-    chip.className = "tm-chip";
-    chip.innerHTML = `
-      <span>${tile.label}</span>
-      <span class="tm-chip-type">${tile.typeId}</span>
-    `;
-    const btn = document.createElement("button");
-    btn.textContent = "Remove";
-    btn.addEventListener("click", () => {
-      state.tiles = state.tiles.filter(t => t.instanceId !== tile.instanceId);
-      saveState();
-      renderAllTiles();
-      updateTileManagerLists();
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
     });
-    chip.appendChild(btn);
-    tmActiveList.appendChild(chip);
-  });
+  }
 
-  // available
-  Object.keys(tileTypes).forEach(typeId => {
-    const def = tileTypes[typeId];
-    const chip = document.createElement("div");
-    chip.className = "tm-chip";
-    chip.innerHTML = `
-      <span>${def.label}</span>
-      <span class="tm-chip-type">${typeId}</span>
-    `;
-    const btn = document.createElement("button");
-    btn.textContent = "Add";
-    btn.addEventListener("click", () => {
-      const instanceId = `${typeId}-${Date.now()}`;
-      const baseOrder = state.tiles.length
-        ? Math.max(...state.tiles.map(t => t.order)) + 1
-        : 1;
-      state.tiles.push({
-        instanceId,
-        typeId,
-        label: def.label,
-        colSpan: def.defaultSize?.colSpan || 1,
-        rowSpan: def.defaultSize?.rowSpan || 1,
-        order: baseOrder,
-        config: def.createInitialConfig ? def.createInitialConfig() : {}
+  /* ---------------------------------------------------------
+     EDIT MODE TOGGLE
+     --------------------------------------------------------- */
+
+  function setEditMode(on) {
+    editMode = on;
+
+    if (on) {
+      document.getElementById("editBar").style.display = "flex";
+      document.querySelectorAll(".tile").forEach(tile => {
+        const tId = tile.dataset.id;
+        const tData = layout.tiles.find(t => t.id === tId);
+        enableTileEditing(tile, tData);
       });
-      saveState();
+    } else {
+      document.getElementById("editBar").style.display = "none";
+      document.querySelectorAll(".tile").forEach(tile => tile.classList.remove("tile-edit"));
+    }
+  }
+
+  /* ---------------------------------------------------------
+     TILE MANAGER
+     --------------------------------------------------------- */
+
+  document.getElementById("editTileManagerBtn").onclick = () => {
+    renderTileManager(tileTypes, layout, () => {
+      saveState(layout);
       renderAllTiles();
-      updateTileManagerLists();
     });
-    tmAvailableList.appendChild(chip);
+    document.getElementById("tileManagerOverlay").classList.remove("hidden");
+  };
+
+  document.getElementById("tmCloseBtn").onclick = () => {
+    document.getElementById("tileManagerOverlay").classList.add("hidden");
+  };
+
+  /* ---------------------------------------------------------
+     EDIT BAR DONE BUTTON
+     --------------------------------------------------------- */
+
+  document.getElementById("editDoneBtn").onclick = () => {
+    setEditMode(false);
+    saveState(layout);
+    renderAllTiles();
+  };
+
+  /* ---------------------------------------------------------
+     HOLD EMPTY SPACE TO ENTER EDIT MODE
+     --------------------------------------------------------- */
+
+  let pressTimer = null;
+
+  root.addEventListener("pointerdown", e => {
+    if (e.target === root) {
+      pressTimer = setTimeout(() => {
+        setEditMode(true);
+      }, 700);
+    }
   });
+
+  window.addEventListener("pointerup", () => {
+    clearTimeout(pressTimer);
+  });
+
+  /* ---------------------------------------------------------
+     INITIALIZE DASHBOARD
+     --------------------------------------------------------- */
+
+  renderAllTiles();
+  console.log("%cDashboard ready.", "color:#7f7");
 }
