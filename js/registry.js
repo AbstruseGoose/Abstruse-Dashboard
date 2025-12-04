@@ -1,84 +1,421 @@
-// js/registry.js
-import { initDashboard } from "./core/engine.js";
-import { initWeatherEngine } from "./core/weatherEngine.js";
+/* =====================================================================
+   ABSTRUSE DASHBOARD — TILE REGISTRY
+   Loads every tile module and initializes the dashboard engine.
+   ===================================================================== */
 
-import * as nowTile from "./tiles/now.js";
-import * as hourlyTile from "./tiles/hourly.js";
-import * as radarTile from "./tiles/radar.js";
-import * as scheduleTile from "./tiles/schedule.js";
-import * as speedTile from "./tiles/speed.js";
-import * as camTile from "./tiles/camera.js";
-import * as camAutoTile from "./tiles/cameraDiscovery.js";
-import * as systemStatusTile from "./tiles/systemStatus.js";
+import { startDashboard } from "./core/engine.js";
 
-import { makePlaceholderTile } from "./tiles/placeholderTiles.js";
+/* =============================
+   IMPORT ALL TILE MODULES
+   ============================= */
 
-// Build placeholder tile modules
-const dailyTile        = makePlaceholderTile("daily",        "Daily Weather", "Daily high/low summary tile (placeholder for now).");
-const forecast7Tile    = makePlaceholderTile("forecast7",    "7-Day Forecast", "Multi-day forecast tile (placeholder).");
-const alertsTile       = makePlaceholderTile("alerts",       "Weather Alerts", "Severe weather alerts tile (placeholder).");
-const radarCtrlTile    = makePlaceholderTile("radarControls","Radar Controls", "Controls for radar animation and layers (placeholder).");
-const lanScanTile      = makePlaceholderTile("lanScan",      "LAN Scanner", "LAN device discovery tile (placeholder).");
-const uptimeTile       = makePlaceholderTile("uptime",       "Uptime Monitor", "Service status monitor (placeholder).");
-const trafficTile      = makePlaceholderTile("traffic",      "Network Traffic", "Network traffic overview (placeholder).");
-const camGridTile      = makePlaceholderTile("camGrid",      "Camera Grid", "Multi-camera grid view (placeholder).");
-const camMotionTile    = makePlaceholderTile("camMotion",    "Camera Motion", "Motion alert snapshots (placeholder).");
-const todoTile         = makePlaceholderTile("todo",         "To-Do", "Simple to-do list tile (placeholder).");
-const notesTile        = makePlaceholderTile("notes",        "Notes", "Quick notes tile (placeholder).");
-const htmlTile         = makePlaceholderTile("customHTML",   "Custom HTML", "Render custom HTML (placeholder).");
-const iframeTile       = makePlaceholderTile("iframe",       "Web View", "Embed external webpage (placeholder).");
-const moonTile         = makePlaceholderTile("moon",         "Moon Phase", "Moon phase visualization (placeholder).");
-const sunTile          = makePlaceholderTile("sun",          "Sun Tracker", "Sunrise/sunset tracking (placeholder).");
-const gardenTile       = makePlaceholderTile("garden",       "Garden Sensors", "LoRa/ESP32 garden sensor tile (placeholder).");
-const calcTile         = makePlaceholderTile("calculator",   "Calculator", "Simple calculator (placeholder).");
-const clockTile        = makePlaceholderTile("clock",        "Clock", "Analog/digital clock (placeholder).");
-const uploaderTile     = makePlaceholderTile("uploader",     "File Uploader", "File uploader (placeholder).");
+// Weather tiles
+import * as NowTile from "./tiles/now.js";
+import * as HourlyTile from "./tiles/hourly.js";
+import * as DailyTile from "./tiles/daily.js";
+import * as Forecast7Tile from "./tiles/forecast7.js";
+import * as AlertsTile from "./tiles/alerts.js";
+import * as RadarTile from "./tiles/radar.js";
+import * as RadarControlsTile from "./tiles/radarControls.js";
 
-// Register all tile types by id
-const allTileTypes = {
-  [nowTile.id]: nowTile,
-  [hourlyTile.id]: hourlyTile,
-  [radarTile.id]: radarTile,
-  [scheduleTile.id]: scheduleTile,
-  [speedTile.id]: speedTile,
-  [camTile.id]: camTile,
-  [camAutoTile.id]: camAutoTile,
-  [systemStatusTile.id]: systemStatusTile,
+// Cameras
+import * as CamTile from "./tiles/camera.js";
+import * as CamGridTile from "./tiles/cameraGrid.js";
+import * as CamDiscoveryTile from "./tiles/cameraDiscovery.js";
 
-  [dailyTile.id]: dailyTile,
-  [forecast7Tile.id]: forecast7Tile,
-  [alertsTile.id]: alertsTile,
-  [radarCtrlTile.id]: radarCtrlTile,
-  [lanScanTile.id]: lanScanTile,
-  [uptimeTile.id]: uptimeTile,
-  [trafficTile.id]: trafficTile,
-  [camGridTile.id]: camGridTile,
-  [camMotionTile.id]: camMotionTile,
-  [todoTile.id]: todoTile,
-  [notesTile.id]: notesTile,
-  [htmlTile.id]: htmlTile,
-  [iframeTile.id]: iframeTile,
-  [moonTile.id]: moonTile,
-  [sunTile.id]: sunTile,
-  [gardenTile.id]: gardenTile,
-  [calcTile.id]: calcTile,
-  [clockTile.id]: clockTile,
-  [uploaderTile.id]: uploaderTile
+// System / Network
+import * as SystemInfoTile from "./tiles/systemInfo.js";
+import * as SystemStatusTile from "./tiles/systemStatus.js";
+import * as NetworkScanTile from "./tiles/networkScan.js";
+import * as UptimeTile from "./tiles/uptime.js";
+import * as TrafficTile from "./tiles/traffic.js";
+
+// Utility tiles
+import * as TodoTile from "./tiles/todo.js";
+import * as NotesTile from "./tiles/notes.js";
+import * as ClockTile from "./tiles/clock.js";
+import * as CalculatorTile from "./tiles/calculator.js";
+import * as IframeTile from "./tiles/iframe.js";
+import * as CustomHTMLTile from "./tiles/customHTML.js";
+import * as FileUploadTile from "./tiles/uploader.js";
+
+// Cosmic / Farm / Sensors
+import * as MoonTile from "./tiles/moon.js";
+import * as SunTile from "./tiles/sun.js";
+import * as GardenTile from "./tiles/garden.js";
+
+// Speed / Ping
+import * as SpeedTile from "./tiles/speed.js";
+
+// Calendar
+import * as ScheduleTile from "./tiles/schedule.js";
+
+
+
+/* =====================================================================
+   TILE REGISTRY — maps tile IDs to their modules.
+   ===================================================================== */
+
+export const tileTypes = {
+  // Weather
+  [NowTile.id]: NowTile,
+  [HourlyTile.id]: HourlyTile,
+  [DailyTile.id]: DailyTile,
+  [Forecast7Tile.id]: Forecast7Tile,
+  [AlertsTile.id]: AlertsTile,
+  [RadarTile.id]: RadarTile,
+  [RadarControlsTile.id]: RadarControlsTile,
+
+  // Cameras
+  [CamTile.id]: CamTile,
+  [CamGridTile.id]: CamGridTile,
+  [CamDiscoveryTile.id]: CamDiscoveryTile,
+
+  // System / Network
+  [SystemInfoTile.id]: SystemInfoTile,
+  [SystemStatusTile.id]: SystemStatusTile,
+  [NetworkScanTile.id]: NetworkScanTile,
+  [UptimeTile.id]: UptimeTile,
+  [TrafficTile.id]: TrafficTile,
+
+  // Utility
+  [TodoTile.id]: TodoTile,
+  [NotesTile.id]: NotesTile,
+  [ClockTile.id]: ClockTile,
+  [CalculatorTile.id]: CalculatorTile,
+  [IframeTile.id]: IframeTile,
+  [CustomHTMLTile.id]: CustomHTMLTile,
+  [FileUploadTile.id]: FileUploadTile,
+
+  // Cosmic / Farm
+  [MoonTile.id]: MoonTile,
+  [SunTile.id]: SunTile,
+  [GardenTile.id]: GardenTile,
+
+  // Speed / Ping
+  [SpeedTile.id]: SpeedTile,
+
+  // Calendar
+  [ScheduleTile.id]: ScheduleTile
 };
 
-// Default layout: what you start with on first load
-const defaultLayout = [
-  { typeId: "now",      colSpan: 2, rowSpan: 1, label: nowTile.label,      order: 1 },
-  { typeId: "hourly",   colSpan: 2, rowSpan: 1, label: hourlyTile.label,   order: 2 },
-  { typeId: "schedule", colSpan: 2, rowSpan: 2, label: scheduleTile.label, order: 3 },
-  { typeId: "cam",      colSpan: 1, rowSpan: 1, label: "Cam 1",            order: 4 },
-  { typeId: "cam",      colSpan: 1, rowSpan: 1, label: "Cam 2",            order: 5 },
-  { typeId: "cam",      colSpan: 1, rowSpan: 1, label: "Cam 3",            order: 6 },
-  { typeId: "radar",    colSpan: 2, rowSpan: 2, label: radarTile.label,    order: 7 },
-  { typeId: "speed",    colSpan: 1, rowSpan: 1, label: speedTile.label,    order: 8 },
-  { typeId: "camAuto",  colSpan: 1, rowSpan: 1, label: camAutoTile.label,  order: 9 },
-  { typeId: "systemStatus", colSpan: 1, rowSpan: 1, label: systemStatusTile.label, order: 10 }
-];
 
-initWeatherEngine();
-initDashboard(allTileTypes, defaultLayout);
+
+/* =====================================================================
+   DEFAULT LAYOUT — starting tile layout when clearing local storage.
+   You can modify this however you want.
+   ===================================================================== */
+
+const defaultLayout = {
+  extras: {
+    gpsEnabled: true,
+    weatherApiKey: "",
+    icsCalendar: "",
+    tilePadding: 12,
+    gridCols: 6
+  },
+
+  tiles: [
+    // WEATHER
+    {
+      id: "weather-now",
+      type: "now",
+      label: "Current Weather",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 1,
+      enabled: true,
+      config: {}
+    },
+    {
+      id: "weather-hourly",
+      type: "hourly",
+      label: "Hourly Weather",
+      colSpan: 3,
+      rowSpan: 1,
+      order: 2,
+      enabled: true,
+      config: {}
+    },
+    {
+      id: "weather-daily",
+      type: "daily",
+      label: "Daily Weather",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 3,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "weather-7day",
+      type: "forecast7",
+      label: "7-Day Forecast",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 4,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "weather-alerts",
+      type: "alerts",
+      label: "Weather Alerts",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 5,
+      enabled: false,
+      config: {}
+    },
+
+    // RADAR
+    {
+      id: "radar-main",
+      type: "radar",
+      label: "Live Radar",
+      colSpan: 3,
+      rowSpan: 2,
+      order: 6,
+      enabled: true,
+      config: {}
+    },
+    {
+      id: "radar-controls",
+      type: "radarControls",
+      label: "Radar Controls",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 7,
+      enabled: false,
+      config: {}
+    },
+
+    // CAMERAS
+    {
+      id: "camera-1",
+      type: "camera",
+      label: "Camera 1",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 8,
+      enabled: true,
+      config: {}
+    },
+    {
+      id: "camera-disc",
+      type: "cameraDiscovery",
+      label: "Camera Discovery",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 9,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "camera-grid",
+      type: "cameraGrid",
+      label: "Camera Grid",
+      colSpan: 3,
+      rowSpan: 3,
+      order: 10,
+      enabled: false,
+      config: {}
+    },
+
+    // CALENDAR
+    {
+      id: "schedule",
+      type: "schedule",
+      label: "Schedule",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 11,
+      enabled: true,
+      config: {}
+    },
+
+    // SYSTEM INFO (your old system tile)
+    {
+      id: "system-info",
+      type: "systemInfo",
+      label: "System Info",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 12,
+      enabled: true,
+      config: {}
+    },
+
+    // SYSTEM STATUS (new multi-source huge tile)
+    {
+      id: "system-status",
+      type: "systemStatus",
+      label: "System Status",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 13,
+      enabled: true,
+      config: SystemStatusTile.createInitialState()
+    },
+
+    // NETWORK / SPEED
+    {
+      id: "speedtest",
+      type: "speed",
+      label: "Speed Test",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 14,
+      enabled: true,
+      config: {}
+    },
+
+    {
+      id: "network-scan",
+      type: "networkScan",
+      label: "LAN Scanner",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 15,
+      enabled: false,
+      config: {}
+    },
+
+    {
+      id: "network-uptime",
+      type: "uptime",
+      label: "Uptime Monitor",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 16,
+      enabled: false,
+      config: {}
+    },
+
+    {
+      id: "network-traffic",
+      type: "traffic",
+      label: "Network Traffic",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 17,
+      enabled: false,
+      config: {}
+    },
+
+    // UTILITIES
+    {
+      id: "todo",
+      type: "todo",
+      label: "To Do",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 18,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "notes",
+      type: "notes",
+      label: "Notes",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 19,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "clock",
+      type: "clock",
+      label: "Clock",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 20,
+      enabled: true,
+      config: {}
+    },
+    {
+      id: "calculator",
+      type: "calculator",
+      label: "Calculator",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 21,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "iframe",
+      type: "iframe",
+      label: "Iframe Viewer",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 22,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "custom-html",
+      type: "customHTML",
+      label: "Custom HTML",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 23,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "uploader",
+      type: "uploader",
+      label: "File Uploader",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 24,
+      enabled: false,
+      config: {}
+    },
+
+    // COSMIC / FARM
+    {
+      id: "moon",
+      type: "moon",
+      label: "Moon Phase",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 25,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "sun",
+      type: "sun",
+      label: "Sun Tracker",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 26,
+      enabled: false,
+      config: {}
+    },
+    {
+      id: "garden",
+      type: "garden",
+      label: "Garden Sensors",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 27,
+      enabled: false,
+      config: {}
+    }
+  ]
+};
+
+
+
+/* =====================================================================
+   START ENGINE
+   ===================================================================== */
+
+startDashboard({
+  tileTypes,
+  defaultLayout
+});
