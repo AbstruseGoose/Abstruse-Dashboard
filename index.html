@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Abstruse Networks Dashboard</title>
+<title>Abstruse Dashboard v2</title>
 
-<!-- Leaflet for Radar Map -->
+<!-- Leaflet for Radar -->
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -18,732 +18,516 @@
   crossorigin=""
 ></script>
 
-<!-- Interact.js for drag/reorder -->
-<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
-
 <style>
 :root {
-    --glass-bg: rgba(15, 15, 20, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --accent: #4dd0ff;
-    --accent-soft: rgba(77, 208, 255, 0.4);
-    --text-main: #ffffff;
-    --text-soft: #cfd8dc;
+  --bg-main: #050509;
+  --accent: #4dd0ff;
+  --accent-soft: rgba(77, 208, 255, 0.3);
+  --text-main: #ffffff;
+  --text-soft: #cfd8dc;
+  --tile-bg: rgba(12, 14, 20, 0.88);
+  --tile-border: rgba(255, 255, 255, 0.16);
+  --grid-gap: 10px;
+  --grid-row-height: 220px;
 }
 
+/* Base */
 * { box-sizing: border-box; }
 
 body {
-    margin: 0;
-    padding: 0;
-    color: var(--text-main);
-    font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    background:
-        radial-gradient(circle at 0% 0%, #1a237e 0, transparent 55%),
-        radial-gradient(circle at 100% 0%, #004d40 0, transparent 55%),
-        radial-gradient(circle at 0% 100%, #b71c1c 0, transparent 55%),
-        #050509;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at 0% 0%, #1a237e 0, transparent 55%),
+    radial-gradient(circle at 100% 0%, #004d40 0, transparent 55%),
+    radial-gradient(circle at 0% 100%, #b71c1c 0, transparent 55%),
+    var(--bg-main);
+  height: 100vh;
+  overflow: hidden;
 }
 
-.glass {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: 16px;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    box-shadow:
-        0 18px 40px rgba(0, 0, 0, 0.6),
-        0 0 30px rgba(0, 188, 212, 0.22);
+#canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-auto-rows: var(--grid-row-height);
+  gap: var(--grid-gap);
 }
 
-.fade-in {
-    animation: fadeIn 0.7s ease-out forwards;
-    opacity: 0;
-}
-@keyframes fadeIn {
-    to { opacity: 1; transform: translateY(0); }
-    from { opacity: 0; transform: translateY(8px); }
-}
-
-.slide-in-right {
-    animation: slideInRight 0.7s ease-out forwards;
-    opacity: 0;
-}
-@keyframes slideInRight {
-    from { opacity: 0; transform: translateX(20px); }
-    to { opacity: 1; transform: translateX(0); }
+/* Subtle background pattern */
+#canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 0);
+  background-size: 40px 40px;
+  opacity: 0.18;
+  pointer-events: none;
 }
 
-.pulse-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #4caf50;
-    position: relative;
-}
-.pulse-dot::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    border: 2px solid rgba(76, 175, 80, 0.6);
-    animation: pulse 1.8s infinite;
-}
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 0.9; }
-    100% { transform: scale(2.4); opacity: 0; }
-}
-
-/* Layout */
-#topBar {
-    margin: 14px 14px 6px;
-    padding: 16px 22px;
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    position: relative;
-}
-
-#timeBlock { min-width: 260px; }
-#time { font-size: 46px; font-weight: 600; letter-spacing: 1px; }
-#date { font-size: 18px; color: var(--text-soft); margin-top: 4px; }
-
-#currentWeather {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding-left: 18px;
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
-}
-#currentWeather img {
-    width: 60px;
-    height: 60px;
-    filter: drop-shadow(0 0 10px rgba(0,0,0,0.6));
-}
-#currentTemp { font-size: 34px; font-weight: 600; }
-#currentDesc { font-size: 14px; color: var(--text-soft); text-transform: capitalize; }
-
-#hourlyWeather {
-    flex: 1;
-    margin-left: 30px;
-    display: flex;
-    align-items: center;
-    overflow-x: auto;
-    scrollbar-width: thin;
-}
-#hourlyWeather::-webkit-scrollbar { height: 4px; }
-#hourlyWeather::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.25);
-    border-radius: 999px;
-}
-
-.hourItem {
-    min-width: 70px;
-    text-align: center;
-    margin-right: 18px;
-    font-size: 15px;
-    color: var(--text-soft);
-    transform: translateY(4px);
-    animation: fadeIn 0.6s ease-out forwards;
-}
-.hourItem img {
-    width: 30px;
-    height: 30px;
-    margin: 4px auto;
-}
-.hourTemp { font-weight: 600; color: var(--accent); }
-.hourRain { font-size: 13px; color: var(--accent); }
-
-#main {
-    flex: 1;
-    padding: 2px 14px 8px;
-    min-height: 0;
-}
-
-/* Tiles grid */
-#tilesArea {
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    grid-auto-rows: 220px;
-    gap: 10px;
-}
-
+/* Tiles */
 .tile {
-    position: relative;
-    overflow: hidden;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.18);
-    background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(0,0,0,0.9));
-    animation: fadeIn 0.4s ease-out forwards;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-}
-.tile-large {
-    grid-column: span 2;
-    grid-row: span 2;
-}
-
-/* Edit mode */
-.tile.editing {
-    transform: scale(1.03);
-    box-shadow:
-        0 20px 40px rgba(0,0,0,0.8),
-        0 0 20px rgba(77, 208, 255, 0.65);
-    border-color: rgba(77,208,255,0.9);
-    z-index: 5;
+  position: relative;
+  background: var(--tile-bg);
+  border-radius: 10px;
+  border: 1px solid var(--tile-border);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,0.7),
+    0 0 35px rgba(0, 188, 212, 0.18);
+  overflow: hidden;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out,
+              border-color 160ms ease-out, grid-column 160ms ease-out,
+              grid-row 160ms ease-out;
 }
 
-/* Cam / radar / etc visuals */
-.tile img,
-.tile video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    border: none;
+/* Hybrid tech panel styling */
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,0.03);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.04), transparent 40%),
+    repeating-linear-gradient(135deg,
+      rgba(255,255,255,0.03) 0px,
+      rgba(255,255,255,0.03) 1px,
+      transparent 1px,
+      transparent 3px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.tileContent {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Label & gear */
-.camLabel {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    font-size: 12px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(0,0,0,0.55);
-    border: 1px solid rgba(255,255,255,0.25);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    z-index: 2;
+/* Tile header label */
+.tileLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.tileGear {
-    position: absolute;
-    right: 10px;
-    top: 8px;
-    font-size: 16px;
-    padding: 4px 6px;
-    border-radius: 999px;
-    background: rgba(0,0,0,0.7);
-    border: 1px solid rgba(255,255,255,0.35);
-    color: var(--text-soft);
-    cursor: pointer;
-    display: none;
-    z-index: 3;
+.tileLabel span {
+  opacity: 0.9;
 }
-.tile.editing .tileGear { display: block; }
 
-/* Tile settings panel */
+/* Edit chrome (only visible in edit mode) */
+.tileEditChrome {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px dashed rgba(77, 208, 255, 0.7);
+  box-shadow: 0 0 24px rgba(77, 208, 255, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+.tile.editModeActive .tileEditChrome {
+  opacity: 1;
+  pointer-events: none;
+}
+.tile.editModeActive {
+  transform: translateY(-2px);
+}
+
+/* Drag handle */
+.dragHandle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+.tile.editModeActive .dragHandle {
+  opacity: 1;
+}
+
+/* Resize handle */
+.resizeHandle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(77,208,255,0.7);
+  background: radial-gradient(circle at 0 100%, var(--accent) 0, transparent 70%);
+  box-shadow: 0 0 8px rgba(77,208,255,0.8);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+.tile.editModeActive .resizeHandle {
+  opacity: 1;
+}
+
+/* Tile gear */
+.tileGearBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.75);
+  color: var(--text-soft);
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  z-index: 2;
+}
+.tile.editModeActive .tileGearBtn {
+  opacity: 1;
+}
+
+/* Edit bar (only when editing) */
+#editBar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(5,5,10,0.88);
+  border: 1px solid rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
+  z-index: 20;
+}
+#editBar.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+#editBar span {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.editBarBtn {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.8);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+/* Settings panel (per-tile, small overlay) */
 .tileSettingsPanel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(5,5,10,0.95);
-    border-top: 1px solid rgba(255,255,255,0.2);
-    padding: 8px 10px 8px;
-    font-size: 12px;
-    z-index: 4;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(5,5,10,0.96);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 6px 8px;
+  font-size: 11px;
+  z-index: 5;
+  display: none;
 }
 .tileSettingsPanel h4 {
-    margin: 0 0 4px 0;
-    font-size: 12px;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-soft);
 }
-.tileSettingsRow {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 4px;
+.ts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
 }
-.tileSettingsRow label {
-    font-size: 11px;
-    color: var(--text-soft);
+.ts-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.tileSettingsRow input,
-.tileSettingsRow select {
-    font-size: 11px;
-    padding: 2px 4px;
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(0,0,0,0.7);
-    color: var(--text-main);
+.ts-row input,
+.ts-row select {
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.85);
+  color: var(--text-main);
 }
-.tileSettingsButtons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 6px;
-    margin-top: 4px;
+.ts-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
 }
-.tileSettingsButtons button {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.7);
-    color: var(--text-main);
-    cursor: pointer;
+.ts-buttons button {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.85);
+  color: var(--text-main);
+  cursor: pointer;
 }
 
-/* Schedule tile */
-.scheduleTile {
-    position: absolute;
-    inset: 0;
-    padding: 26px 12px 40px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+/* Current weather / time tile */
+.nowTime {
+  font-size: 32px;
+  font-weight: 600;
 }
-#scheduleDateLabel { font-size: 14px; color: var(--text-soft); margin-bottom: 6px; }
-#scheduleList {
-    flex: 1;
-    overflow-y: auto;
-    padding-right: 6px;
+.nowDate {
+  font-size: 13px;
+  color: var(--text-soft);
 }
-#scheduleList::-webkit-scrollbar { width: 4px; }
-#scheduleList::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.25);
-    border-radius: 999px;
+.nowRow {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  align-items: center;
 }
-.scheduleItem {
-    padding: 6px 0;
-    border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    font-size: 14px;
+.nowWeatherMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.scheduleTime {
-    font-weight: 600;
-    color: var(--accent);
-    min-width: 70px;
-    font-size: 13px;
+.nowWeatherMain img {
+  width: 52px;
+  height: 52px;
 }
-.scheduleTitle { flex: 1; }
-.scheduleEmpty {
-    padding-top: 6px;
-    color: var(--text-soft);
-    font-size: 14px;
+.nowTemp {
+  font-size: 26px;
+  font-weight: 600;
+}
+.nowDesc {
+  font-size: 13px;
+  color: var(--text-soft);
+  text-transform: capitalize;
+}
+.nowRain {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* Hourly tile */
+.hourlyStrip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.hourlyStrip::-webkit-scrollbar { height: 4px; }
+.hourlyStrip::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 999px;
+}
+.hourItem {
+  min-width: 70px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.hourItem img {
+  width: 26px;
+  height: 26px;
+}
+.hourTemp {
+  font-weight: 600;
+  color: var(--accent);
+}
+.hourRain {
+  font-size: 11px;
+  color: var(--accent);
 }
 
 /* Radar */
 #radarMap {
-    position: absolute;
-    inset: 0;
-    border-radius: 14px;
-    overflow: hidden;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
 }
-.leaflet-container { background: transparent; }
+.leaflet-container {
+  background: transparent;
+}
+
+/* Schedule */
+.scheduleList {
+  margin-top: 6px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.scheduleList::-webkit-scrollbar { width: 4px; }
+.scheduleList::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 999px;
+}
+.scheduleItem {
+  display: flex;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.14);
+}
+.scheduleTime {
+  min-width: 68px;
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 12px;
+}
+.scheduleTitle {
+  flex: 1;
+}
+.scheduleEmpty {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-top: 8px;
+}
+
+/* Camera */
+.camView {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+.camView img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Camera discovery */
+.camDiscover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.camDiscoverStatus {
+  color: var(--text-soft);
+}
+.camDiscoverPreview {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: #000;
+  position: relative;
+}
+.camDiscoverPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.camDiscoverMeta {
+  position: absolute;
+  left: 6px;
+  bottom: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.7);
+  font-size: 11px;
+}
+.camDiscoverButtons {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.camDiscoverButtons button {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.85);
+  color: var(--text-main);
+  cursor: pointer;
+}
 
 /* Speed tile */
-.speedTileContent {
-    position: absolute;
-    inset: 0;
-    padding: 26px 12px 40px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
 .speedStats {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 14px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.speedLine {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
 .speedLabel {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.11em;
-    color: var(--text-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
 }
-.speedValue { font-size: 15px; font-weight: 600; }
-.speedButton {
-    align-self: flex-start;
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.7);
-    color: var(--text-main);
-    cursor: pointer;
-    font-size: 12px;
+.speedValue {
+  font-weight: 600;
 }
-
-/* Status colors for speed tile */
+.speedBtn {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.9);
+  color: var(--text-main);
+  cursor: pointer;
+}
 .statusGood { color: #8bc34a; }
 .statusWarn { color: #ffc107; }
 .statusBad  { color: #ff5252; }
 
-/* Camera Discovery tile */
-.camDiscoverTile {
-    position: absolute;
-    inset: 0;
-    padding: 10px 10px 40px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 13px;
-}
-.camDiscoverStatus {
-    font-size: 12px;
-    color: var(--text-soft);
-}
-.camDiscoverFound {
-    flex: 1;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.15);
-    background: rgba(0,0,0,0.5);
-    position: relative;
-}
-.camDiscoverFound img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-.camDiscoverMeta {
-    position: absolute;
-    left: 6px;
-    bottom: 6px;
-    font-size: 11px;
-    background: rgba(0,0,0,0.7);
-    padding: 4px 6px;
-    border-radius: 6px;
-}
-.camDiscoverBtnRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-}
-.camDiscoverBtnRow button {
-    padding: 5px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.7);
-    color: var(--text-main);
-    cursor: pointer;
-    font-size: 12px;
-}
-
-/* Bottom bar */
-#bottomBar {
-    margin: 2px 14px 14px;
-    padding: 8px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 14px;
-}
-#bottomLeft, #bottomRight {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-}
-.statGroup {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-.statLabel {
-    color: var(--text-soft);
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-}
-.statValue { font-weight: 600; }
-.pill {
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-/* Icon button */
-.iconButton {
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.45);
-    color: #fff;
-    font-size: 16px;
-    padding: 6px 10px;
-    border-radius: 10px;
-    cursor: pointer;
-    margin-left: 12px;
-    transition: 0.2s;
-    backdrop-filter: blur(10px);
-}
-.iconButton:hover {
-    background: rgba(0,0,0,0.85);
-    transform: scale(1.05);
-}
-
-/* Settings button & modal */
-#settingsButton {
-    position: fixed;
-    bottom: 20px;
-    right: 22px;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.6);
-    border: 1px solid rgba(255,255,255,0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-soft);
-    cursor: pointer;
-    font-size: 18px;
-    z-index: 50;
-    backdrop-filter: blur(10px);
-}
-#settingsButton:hover { background: rgba(0,0,0,0.85); }
-
-#settingsModal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.65);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 60;
-}
-#settingsModal.open { display: flex; }
-
-.settingsContent {
-    width: 480px;
-    max-width: calc(100% - 40px);
-    padding: 18px 20px 16px;
-    border-radius: 16px;
-    color: var(--text-main);
-}
-.settingsHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-.settingsHeader h3 {
-    margin: 0;
-    font-size: 18px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-.settingsClose {
-    cursor: pointer;
-    font-size: 18px;
-    opacity: 0.8;
-}
-.settingsGroup { margin-bottom: 10px; }
-.settingsGroup > label {
-    display: block;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-soft);
-    margin-bottom: 4px;
-}
-.settingsGroup input,
-.settingsGroup textarea {
-    width: 100%;
-    padding: 6px 8px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(0,0,0,0.5);
-    color: var(--text-main);
-    font-size: 13px;
-}
-.settingsGroup textarea {
-    min-height: 140px;
-    resize: vertical;
-    font-family: monospace;
-    white-space: pre;
-}
-.settingsHint {
-    font-size: 11px;
-    color: var(--text-soft);
-    margin-top: 2px;
-}
-.settingsCheckboxRow {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 4px;
-    font-size: 13px;
-}
-.settingsCheckboxRow label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    text-transform: none;
-    letter-spacing: 0;
-    color: var(--text-soft);
-}
-.settingsCheckboxRow input[type="checkbox"] { width: auto; }
-
-.settingsActions {
-    margin-top: 10px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-.btn {
-    padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.65);
-    color: var(--text-main);
-    font-size: 13px;
-    cursor: pointer;
-}
-.btn.primary {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-}
-.btn:hover { filter: brightness(1.15); }
-
-@media (max-width: 1100px) {
-    #tilesArea { grid-auto-rows: 200px; }
-}
+/* Utility */
+.hidden { display: none; }
 </style>
 </head>
 <body>
 
-<!-- TOP BAR -->
-<div id="topBar" class="glass fade-in">
-    <div id="timeBlock">
-        <div id="time">--:--</div>
-        <div id="date">Loading...</div>
-    </div>
+<div id="canvas"></div>
 
-    <div id="currentWeather" class="fade-in">
-        <img id="weatherIcon" src="" alt="Weather" />
-        <div>
-            <div id="currentTemp">--°F</div>
-            <div id="currentDesc">Loading...</div>
-        </div>
-    </div>
-
-    <div id="hourlyWeather" class="slide-in-right"></div>
-
-    <button id="weatherRefreshBtn" class="iconButton" title="Refresh Weather">🔄</button>
-</div>
-
-<!-- MAIN GRID -->
-<div id="main">
-    <div id="tilesArea"></div>
-</div>
-
-<!-- BOTTOM BAR -->
-<div id="bottomBar" class="glass fade-in">
-    <div id="bottomLeft">
-        <div class="statGroup">
-            <div class="pulse-dot"></div>
-            <div class="pill">
-                <span class="statLabel">NODE</span>
-                <span id="nodeName" class="statValue">Abstruse Trailer NOC</span>
-            </div>
-        </div>
-    </div>
-    <div id="bottomRight">
-        <div class="statGroup">
-            <span class="statLabel">LAST UPDATE</span>
-            <span id="lastUpdate" class="statValue">--:--</span>
-        </div>
-    </div>
-</div>
-
-<!-- SETTINGS BUTTON -->
-<div id="settingsButton" title="Settings">⚙</div>
-
-<!-- SETTINGS MODAL -->
-<div id="settingsModal">
-    <div class="settingsContent glass">
-        <div class="settingsHeader">
-            <h3>Dashboard Settings</h3>
-            <div id="settingsClose" class="settingsClose">✕</div>
-        </div>
-
-        <div class="settingsGroup">
-            <label for="settingNodeName">Node Name</label>
-            <input id="settingNodeName" type="text" />
-        </div>
-
-        <div class="settingsGroup">
-            <label>Tiles Visible</label>
-            <div class="settingsCheckboxRow">
-                <label><input type="checkbox" id="visibleSchedule"> Schedule</label>
-                <label><input type="checkbox" id="visibleCam1"> Cam 1</label>
-                <label><input type="checkbox" id="visibleCam2"> Cam 2</label>
-                <label><input type="checkbox" id="visibleCam3"> Cam 3</label>
-                <label><input type="checkbox" id="visibleRadar"> Live Radar</label>
-                <label><input type="checkbox" id="visibleSpeed"> Speed / Ping</label>
-                <label><input type="checkbox" id="visibleCameraDiscovery"> Camera Discovery</label>
-            </div>
-        </div>
-
-        <div class="settingsGroup">
-            <label><input type="checkbox" id="lockTiles"> Lock all tile editing</label>
-            <div class="settingsHint">When locked, long-press editing and tile settings menus are disabled.</div>
-        </div>
-
-        <div class="settingsGroup">
-            <label for="settingCamScanSubnet">Camera scan subnet prefix</label>
-            <input id="settingCamScanSubnet" type="text" placeholder="192.168.1." />
-            <div class="settingsHint">Example: <code>192.168.1.</code> (will scan .1–.254).</div>
-        </div>
-
-        <div class="settingsGroup">
-            <label for="settingIcsRaw">Proton Calendar ICS (Paste Full File)</label>
-            <textarea id="settingIcsRaw" placeholder="Paste your exported .ics contents here"></textarea>
-            <div class="settingsHint">Export ICS from Proton, open it in a text editor, copy everything, and paste here. Stored locally only.</div>
-        </div>
-
-        <div class="settingsActions">
-            <button id="settingsCancelBtn" class="btn">Close</button>
-            <button id="settingsSaveBtn" class="btn primary">Save</button>
-        </div>
-    </div>
+<!-- Edit bar (appears only in edit mode) -->
+<div id="editBar">
+  <span>Layout edit mode</span>
+  <button id="editDoneBtn" class="editBarBtn">Done</button>
+  <button id="editSettingsBtn" class="editBarBtn">Settings (basic)</button>
 </div>
 
 <script>
-/* ===== CLOCK ===== */
-function updateClock() {
-    const now = new Date();
-    document.getElementById("time").textContent = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
-    document.getElementById("date").textContent = now.toLocaleDateString([], {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-    });
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-/* ===== LAST UPDATE LABEL ===== */
-const lastUpdateEl = document.getElementById("lastUpdate");
-function updateLastUpdate() {
-    const now = new Date();
-    lastUpdateEl.textContent = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
-}
-
-/* ===== GLOBAL STATE ===== */
-const SETTINGS_KEY = "abstruseDashboardSettings_v5";
-const SETTINGS_PIN = "6251";
+/* ========= GLOBAL CONFIG ========= */
 const API_KEY = "ce57b328ddd2af95c06b77dc11a49bf6";
+const STORAGE_KEY = "abstruse_dashboard_v2";
+const EDIT_LONGPRESS_MS = 700;
 
+/* ========= STATE ========= */
+let state = null;
+let editMode = false;
 let lastLat = null;
 let lastLon = null;
 let gpsTried = false;
@@ -756,1287 +540,1225 @@ let radarFrameIndex = 0;
 let radarAnimTimer = null;
 let radarHost = "https://tilecache.rainviewer.com";
 
+/* ========= DEFAULT STATE ========= */
 const defaultState = {
-    nodeName: "Abstruse Trailer NOC",
-    lockTiles: false,
-    icsRaw: "",
-    cameraScanSubnetPrefix: "192.168.1.",
-    tiles: {
-        schedule: {
-            id: "schedule",
-            type: "schedule",
-            label: "Schedule",
-            enabled: true,
-            order: 1,
-            size: "large",
-            config: {
-                showPast: false,
-                maxEvents: 20,
-                timeFormat24: false
-            }
-        },
-        cam1: {
-            id: "cam1",
-            type: "cam",
-            label: "Cam 1",
-            enabled: true,
-            order: 2,
-            size: "small",
-            config: {
-                url: "http://192.168.1.78",
-                username: "",
-                password: ""
-            }
-        },
-        cam2: {
-            id: "cam2",
-            type: "cam",
-            label: "Cam 2",
-            enabled: true,
-            order: 3,
-            size: "small",
-            config: {
-                url: "http://192.168.1.34",
-                username: "",
-                password: ""
-            }
-        },
-        cam3: {
-            id: "cam3",
-            type: "cam",
-            label: "Cam 3",
-            enabled: true,
-            order: 4,
-            size: "small",
-            config: {
-                url: "http://192.168.1.94",
-                username: "",
-                password: ""
-            }
-        },
-        radar: {
-            id: "radar",
-            type: "radar",
-            label: "Live Radar",
-            enabled: true,
-            order: 5,
-            size: "large",
-            config: {
-                rain: true,
-                snow: false,
-                clouds: false,
-                animSpeedMs: 700,
-                opacity: 0.7,
-                gpsLock: true,
-                baseLayer: "dark"
-            }
-        },
-        speed: {
-            id: "speed",
-            type: "speed",
-            label: "Speed / Ping",
-            enabled: true,
-            order: 6,
-            size: "small",
-            config: {
-                speedUrl: "https://www.abstrusenetworks.com/speedtest.bin",
-                pingTarget: "https://dns.google/resolve?name=google.com",
-                autoIntervalSec: 120
-            }
-        },
-        cameraDiscovery: {
-            id: "cameraDiscovery",
-            type: "camAuto",
-            label: "Camera Discovery",
-            enabled: true,
-            order: 7,
-            size: "small",
-            config: {
-                discoveredIp: "",
-                discoveredPath: "",
-                username: "",
-                password: ""
-            }
-        }
+  cameraScanSubnetPrefix: "192.168.1.",
+  icsRaw: "",
+  tiles: [
+    {
+      id: "now",
+      type: "now",
+      label: "Now / Weather",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 1,
+      config: {}
+    },
+    {
+      id: "hourly",
+      type: "hourly",
+      label: "Hourly Forecast",
+      colSpan: 2,
+      rowSpan: 1,
+      order: 2,
+      config: {}
+    },
+    {
+      id: "schedule",
+      type: "schedule",
+      label: "Schedule",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 3,
+      config: {
+        showPast: false,
+        maxEvents: 20,
+        timeFormat24: false
+      }
+    },
+    {
+      id: "cam1",
+      type: "cam",
+      label: "Cam 1",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 4,
+      config: {
+        url: "http://192.168.1.78",
+        username: "",
+        password: ""
+      }
+    },
+    {
+      id: "cam2",
+      type: "cam",
+      label: "Cam 2",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 5,
+      config: {
+        url: "http://192.168.1.34",
+        username: "",
+        password: ""
+      }
+    },
+    {
+      id: "cam3",
+      type: "cam",
+      label: "Cam 3",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 6,
+      config: {
+        url: "http://192.168.1.94",
+        username: "",
+        password: ""
+      }
+    },
+    {
+      id: "radar",
+      type: "radar",
+      label: "Radar",
+      colSpan: 2,
+      rowSpan: 2,
+      order: 7,
+      config: {
+        rain: true,
+        snow: false,
+        clouds: false,
+        animSpeedMs: 700,
+        opacity: 0.7,
+        baseLayer: "dark",
+        gpsLock: true
+      }
+    },
+    {
+      id: "speed",
+      type: "speed",
+      label: "Speed / Ping",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 8,
+      config: {
+        speedUrl: "https://www.abstrusenetworks.com/speedtest.bin",
+        pingTarget: "https://dns.google/resolve?name=google.com"
+      }
+    },
+    {
+      id: "camDiscover",
+      type: "camAuto",
+      label: "Camera Discovery",
+      colSpan: 1,
+      rowSpan: 1,
+      order: 9,
+      config: {
+        discoveredIp: "",
+        discoveredPath: "",
+        username: "",
+        password: ""
+      }
     }
+  ]
 };
 
-let state = null;
-
-/* ===== STATE LOAD/SAVE ===== */
+/* ========= PERSISTENCE ========= */
 function loadState() {
-    try {
-        const raw = localStorage.getItem(SETTINGS_KEY);
-        if (!raw) return structuredClone(defaultState);
-        const parsed = JSON.parse(raw);
-        const merged = structuredClone(defaultState);
-
-        if (parsed.nodeName) merged.nodeName = parsed.nodeName;
-        if (typeof parsed.lockTiles === "boolean") merged.lockTiles = parsed.lockTiles;
-        if (typeof parsed.icsRaw === "string") merged.icsRaw = parsed.icsRaw;
-        if (typeof parsed.cameraScanSubnetPrefix === "string") {
-            merged.cameraScanSubnetPrefix = parsed.cameraScanSubnetPrefix;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return JSON.parse(JSON.stringify(defaultState));
+    const parsed = JSON.parse(raw);
+    // rudimentary merge
+    const base = JSON.parse(JSON.stringify(defaultState));
+    base.cameraScanSubnetPrefix = parsed.cameraScanSubnetPrefix || base.cameraScanSubnetPrefix;
+    base.icsRaw = parsed.icsRaw || "";
+    if (parsed.tiles) {
+      for (const t of base.tiles) {
+        const existing = parsed.tiles.find(p => p.id === t.id);
+        if (existing) {
+          t.colSpan = existing.colSpan || t.colSpan;
+          t.rowSpan = existing.rowSpan || t.rowSpan;
+          t.order   = existing.order   || t.order;
+          t.label   = existing.label   || t.label;
+          t.config  = { ...t.config, ...(existing.config || {}) };
         }
-
-        if (parsed.tiles) {
-            for (const k in merged.tiles) {
-                if (parsed.tiles[k]) {
-                    merged.tiles[k] = { ...merged.tiles[k], ...parsed.tiles[k] };
-                    if (parsed.tiles[k].config) {
-                        merged.tiles[k].config = { ...merged.tiles[k].config, ...parsed.tiles[k].config };
-                    }
-                }
-            }
-        }
-        return merged;
-    } catch (e) {
-        console.error("State load error", e);
-        return structuredClone(defaultState);
+      }
     }
+    return base;
+  } catch (e) {
+    console.error("State load error", e);
+    return JSON.parse(JSON.stringify(defaultState));
+  }
 }
-
 function saveState() {
-    try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(state));
-    } catch (e) {
-        console.error("State save error", e);
-    }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error("State save error", e);
+  }
 }
 
-/* ===== ADMIN SETTINGS UI ===== */
-const settingsButton = document.getElementById("settingsButton");
-const settingsModal = document.getElementById("settingsModal");
-const settingsClose = document.getElementById("settingsClose");
-const settingsSaveBtn = document.getElementById("settingsSaveBtn");
-const settingsCancelBtn = document.getElementById("settingsCancelBtn");
-
-function openSettingsModal() {
-    document.getElementById("settingNodeName").value = state.nodeName;
-    document.getElementById("settingIcsRaw").value = state.icsRaw || "";
-    document.getElementById("settingCamScanSubnet").value =
-        state.cameraScanSubnetPrefix || "192.168.1.";
-
-    document.getElementById("visibleSchedule").checked        = !!state.tiles.schedule.enabled;
-    document.getElementById("visibleCam1").checked            = !!state.tiles.cam1.enabled;
-    document.getElementById("visibleCam2").checked            = !!state.tiles.cam2.enabled;
-    document.getElementById("visibleCam3").checked            = !!state.tiles.cam3.enabled;
-    document.getElementById("visibleRadar").checked           = !!state.tiles.radar.enabled;
-    document.getElementById("visibleSpeed").checked           = !!state.tiles.speed.enabled;
-    document.getElementById("visibleCameraDiscovery").checked = !!state.tiles.cameraDiscovery.enabled;
-
-    document.getElementById("lockTiles").checked = !!state.lockTiles;
-
-    settingsModal.classList.add("open");
-}
-
-settingsButton.addEventListener("click", () => {
-    const entered = prompt("Enter PIN to open settings:");
-    if (entered === SETTINGS_PIN) {
-        openSettingsModal();
-    } else if (entered !== null) {
-        alert("Incorrect PIN.");
-    }
-});
-
-function closeSettingsModal() { settingsModal.classList.remove("open"); }
-settingsClose.addEventListener("click", closeSettingsModal);
-settingsCancelBtn.addEventListener("click", closeSettingsModal);
-
-settingsSaveBtn.addEventListener("click", () => {
-    state.nodeName = document.getElementById("settingNodeName").value.trim() || defaultState.nodeName;
-    state.icsRaw = document.getElementById("settingIcsRaw").value || "";
-
-    state.cameraScanSubnetPrefix =
-        (document.getElementById("settingCamScanSubnet").value || "").trim() || "192.168.1.";
-
-    state.tiles.schedule.enabled        = document.getElementById("visibleSchedule").checked;
-    state.tiles.cam1.enabled            = document.getElementById("visibleCam1").checked;
-    state.tiles.cam2.enabled            = document.getElementById("visibleCam2").checked;
-    state.tiles.cam3.enabled            = document.getElementById("visibleCam3").checked;
-    state.tiles.radar.enabled           = document.getElementById("visibleRadar").checked;
-    state.tiles.speed.enabled           = document.getElementById("visibleSpeed").checked;
-    state.tiles.cameraDiscovery.enabled = document.getElementById("visibleCameraDiscovery").checked;
-
-    state.lockTiles = document.getElementById("lockTiles").checked;
-
-    saveState();
-    applyGlobalState();
-    closeSettingsModal();
-});
-
-/* ===== APPLY GLOBAL STATE ===== */
-function applyGlobalState() {
-    document.getElementById("nodeName").textContent = state.nodeName;
-    renderTiles();
-}
-
-/* ===== WEATHER + GPS ===== */
+/* ========= WEATHER / LOCATION ========= */
 async function ensureLocationAndWeather() {
-    if (!gpsTried && lastLat === null && lastLon === null && navigator.geolocation) {
-        gpsTried = true;
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                lastLat = pos.coords.latitude;
-                lastLon = pos.coords.longitude;
-                fetchWeather();
-            },
-            (err) => {
-                console.warn("GPS denied or failed, using default coords", err);
-                lastLat = 36.03;
-                lastLon = -84.15;
-                fetchWeather();
-            },
-            { enableHighAccuracy: true, timeout: 5000 }
-        );
-    } else {
-        if (lastLat === null || lastLon === null) {
-            lastLat = 36.03;
-            lastLon = -84.15;
-        }
+  if (!gpsTried && lastLat == null && lastLon == null && navigator.geolocation) {
+    gpsTried = true;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        lastLat = pos.coords.latitude;
+        lastLon = pos.coords.longitude;
         fetchWeather();
+      },
+      err => {
+        console.warn("GPS error, using fallback", err);
+        lastLat = 36.03;
+        lastLon = -84.15;
+        fetchWeather();
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  } else {
+    if (lastLat == null || lastLon == null) {
+      lastLat = 36.03;
+      lastLon = -84.15;
     }
+    fetchWeather();
+  }
 }
 
 async function fetchWeather() {
-    try {
-        const LAT = lastLat;
-        const LON = lastLon;
-        const urlBuilt =
-            "https://api.openweathermap.org/data/2.5/forecast?lat=" +
-            encodeURIComponent(LAT) +
-            "&lon=" + encodeURIComponent(LON) +
-            "&units=imperial&appid=" + encodeURIComponent(API_KEY);
+  try {
+    const LAT = lastLat;
+    const LON = lastLon;
+    const url =
+      "https://api.openweathermap.org/data/2.5/forecast?lat=" +
+      encodeURIComponent(LAT) +
+      "&lon=" + encodeURIComponent(LON) +
+      "&units=imperial&appid=" + encodeURIComponent(API_KEY);
 
-        const response = await fetch(urlBuilt);
-        const data = await response.json();
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.list || !data.list.length) return;
 
-        if (!data.list || !data.list.length) {
-            console.error("Unexpected weather data:", data);
-            return;
-        }
-
-        const current = data.list[0];
-        const icon = current.weather[0].icon;
-        const temp = Math.round(current.main.temp);
-        const desc = current.weather[0].description;
-        const pop = Math.round((current.pop || 0) * 100);
-
-        document.getElementById("weatherIcon").src =
-            "https://openweathermap.org/img/wn/" + icon + "@2x.png";
-        document.getElementById("currentTemp").innerHTML =
-            temp + "°F &nbsp; <span style=\"color:#4dd0ff;font-size:18px;\">" + pop + "% 🌧️</span>";
-        document.getElementById("currentDesc").textContent = desc;
-
-        const hourlyStrip = document.getElementById("hourlyWeather");
-        hourlyStrip.innerHTML = "";
-        const hoursToShow = 12;
-        for (let i = 0; i < Math.min(hoursToShow, data.list.length); i++) {
-            const hr = data.list[i];
-            const t = new Date(hr.dt * 1000).toLocaleTimeString([], { hour: "numeric" });
-            const hrTemp = Math.round(hr.main.temp);
-            const hrIcon = hr.weather[0].icon;
-            const popHr = Math.round((hr.pop || 0) * 100);
-
-            const item = document.createElement("div");
-            item.className = "hourItem";
-            item.style.animationDelay = (i * 0.04) + "s";
-            item.innerHTML =
-                "<div>" + t + "</div>" +
-                "<img src=\"https://openweathermap.org/img/wn/" + hrIcon + ".png\" alt=\"\">" +
-                "<div class=\"hourTemp\">" + hrTemp + "°F</div>" +
-                "<div class=\"hourRain\">" + popHr + "% 🌧️</div>";
-            hourlyStrip.appendChild(item);
-        }
-
-        updateLastUpdate();
-
-        if (state.tiles.radar.enabled) {
-            initRadarMap();
-        }
-    } catch (err) {
-        console.error("Weather error:", err);
+    window.__weatherData = data;
+    renderNowTile();
+    renderHourlyTile();
+    if (getTile("radar")) {
+      initRadar();
     }
+  } catch (e) {
+    console.error("Weather error", e);
+  }
 }
 
-document.getElementById("weatherRefreshBtn").addEventListener("click", () => {
-    const btn = document.getElementById("weatherRefreshBtn");
-    btn.style.transform = "rotate(180deg)";
-    setTimeout(() => { btn.style.transform = "rotate(0deg)"; }, 400);
-    ensureLocationAndWeather();
-});
-
-ensureLocationAndWeather();
-setInterval(ensureLocationAndWeather, 1000 * 60 * 5);
-
-/* ===== ICS SCHEDULE ===== */
-function parseICSTime(dtVal) {
-    const datePart = dtVal.slice(0, 8);
-    const year = parseInt(datePart.slice(0, 4), 10);
-    const month = parseInt(datePart.slice(4, 6), 10) - 1;
-    const day = parseInt(datePart.slice(6, 8), 10);
-
-    if (dtVal.length > 8) {
-        const timePart = dtVal.slice(9, 15);
-        const hour = parseInt(timePart.slice(0, 2), 10);
-        const minute = parseInt(timePart.slice(2, 4), 10);
-        const second = parseInt(timePart.slice(4, 6), 10);
-        return new Date(Date.UTC(year, month, day, hour, minute, second));
-    } else {
-        return new Date(year, month, day);
-    }
+/* ========= TILES HELPERS ========= */
+function getTile(id) {
+  return state.tiles.find(t => t.id === id);
+}
+function sortTiles() {
+  state.tiles.sort((a, b) => a.order - b.order);
 }
 
-function formatTimeLabel(dateObj, allDay, use24h) {
-    if (allDay) return "All day";
-    return dateObj.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
+/* ========= RENDER ALL TILES ========= */
+function renderAllTiles() {
+  const canvas = document.getElementById("canvas");
+  canvas.innerHTML = "";
+  sortTiles();
+
+  state.tiles.forEach(tileCfg => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.dataset.id = tileCfg.id;
+    tile.style.gridColumn = "span " + tileCfg.colSpan;
+    tile.style.gridRow = "span " + tileCfg.rowSpan;
+
+    const editChrome = document.createElement("div");
+    editChrome.className = "tileEditChrome";
+    tile.appendChild(editChrome);
+
+    const dragHandle = document.createElement("div");
+    dragHandle.className = "dragHandle";
+    tile.appendChild(dragHandle);
+
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "resizeHandle";
+    tile.appendChild(resizeHandle);
+
+    const gearBtn = document.createElement("button");
+    gearBtn.className = "tileGearBtn";
+    gearBtn.textContent = "⚙";
+    tile.appendChild(gearBtn);
+
+    const content = document.createElement("div");
+    content.className = "tileContent";
+    tile.appendChild(content);
+
+    const header = document.createElement("div");
+    header.className = "tileLabel";
+    header.innerHTML = `<span>${tileCfg.label}</span>`;
+    content.appendChild(header);
+
+    // Tile-specific content
+    if (tileCfg.type === "now") {
+      content.appendChild(buildNowInner());
+    } else if (tileCfg.type === "hourly") {
+      content.appendChild(buildHourlyInner());
+    } else if (tileCfg.type === "schedule") {
+      content.appendChild(buildScheduleInner());
+    } else if (tileCfg.type === "radar") {
+      const mapWrapper = document.createElement("div");
+      mapWrapper.style.flex = "1";
+      const m = document.createElement("div");
+      m.id = "radarMap";
+      mapWrapper.appendChild(m);
+      content.appendChild(mapWrapper);
+    } else if (tileCfg.type === "cam") {
+      const cv = document.createElement("div");
+      cv.className = "camView";
+      const img = document.createElement("img");
+      img.alt = tileCfg.label;
+      img.dataset.camId = tileCfg.id;
+      cv.appendChild(img);
+      content.appendChild(cv);
+      setupCamStream(img, tileCfg);
+    } else if (tileCfg.type === "camAuto") {
+      content.appendChild(buildCamDiscoverInner(tileCfg));
+    } else if (tileCfg.type === "speed") {
+      content.appendChild(buildSpeedInner(tileCfg));
+    }
+
+    // settings panel
+    const settingsPanel = document.createElement("div");
+    settingsPanel.className = "tileSettingsPanel";
+    settingsPanel.innerHTML = buildTileSettingsHtml(tileCfg);
+    tile.appendChild(settingsPanel);
+
+    // wire settings
+    gearBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!editMode) return;
+      settingsPanel.style.display =
+        settingsPanel.style.display === "none" || !settingsPanel.style.display
+          ? "block"
+          : "none";
+      attachSettingsHandlers(tileCfg, tile, settingsPanel);
+    });
+
+    canvas.appendChild(tile);
+
+    // editing interactions
+    setupTileDrag(tile, dragHandle, tileCfg);
+    setupTileResize(tile, resizeHandle, tileCfg);
+  });
+
+  applyEditModeVisuals();
+  renderScheduleTile();
+  if (getTile("radar")) initRadar();
 }
 
-function loadScheduleIntoDOM() {
-    const dateLabel = document.getElementById("scheduleDateLabel");
-    const scheduleList = document.getElementById("scheduleList");
-    if (!dateLabel || !scheduleList) return;
+/* ========= TILE-SPECIFIC BUILDERS ========= */
+function buildNowInner() {
+  const wrapper = document.createElement("div");
+  const timeRow = document.createElement("div");
+  timeRow.className = "nowTime";
+  timeRow.id = "nowTime";
+  wrapper.appendChild(timeRow);
 
-    try {
-        const now = new Date();
-        const todayKey = now.toISOString().slice(0, 10).replace(/-/g, "");
-        dateLabel.textContent = now.toLocaleDateString([], {
-            weekday: "long",
-            month: "long",
-            day: "numeric"
-        });
+  const dateRow = document.createElement("div");
+  dateRow.className = "nowDate";
+  dateRow.id = "nowDate";
+  wrapper.appendChild(dateRow);
 
-        const text = (state.icsRaw || "").trim();
-        if (!text) {
-            scheduleList.innerHTML =
-                "<div class=\"scheduleEmpty\">No ICS data pasted yet. Open settings to add your Proton calendar.</div>";
-            return;
-        }
+  const row = document.createElement("div");
+  row.className = "nowRow";
 
-        const cfg = state.tiles.schedule.config;
-        const showPast = !!cfg.showPast;
-        const maxEvents = cfg.maxEvents || 20;
-        const use24h = !!cfg.timeFormat24;
+  const left = document.createElement("div");
+  left.className = "nowWeatherMain";
+  left.innerHTML = `
+    <img id="nowIcon" alt="Weather">
+    <div>
+      <div class="nowTemp" id="nowTemp">--°F</div>
+      <div class="nowDesc" id="nowDesc">Loading...</div>
+    </div>
+  `;
 
-        const blocks = text.split("BEGIN:VEVENT").slice(1);
-        const events = [];
+  const right = document.createElement("div");
+  right.style.textAlign = "right";
+  right.innerHTML = `
+    <div class="nowRain" id="nowRain">--% 🌧️</div>
+  `;
 
-        blocks.forEach(blockRaw => {
-            const block = "BEGIN:VEVENT" + blockRaw;
-            const lines = block.split(/\r?\n/);
-            const dtStartLine = lines.find(l => l.startsWith("DTSTART"));
-            const summaryLine = lines.find(l => l.startsWith("SUMMARY:"));
-            if (!dtStartLine || !summaryLine) return;
+  row.appendChild(left);
+  row.appendChild(right);
 
-            const dtVal = dtStartLine.split(":")[1].trim();
-            const dateKey = dtVal.slice(0, 8);
-            if (dateKey !== todayKey) return;
-
-            const allDay = dtVal.length === 8;
-            const startDate = parseICSTime(dtVal);
-            const title = summaryLine.slice("SUMMARY:".length).trim();
-
-            if (!showPast && !allDay && startDate < now) return;
-
-            events.push({ start: startDate, allDay, title });
-        });
-
-        events.sort((a, b) => a.start - b.start);
-
-        scheduleList.innerHTML = "";
-
-        if (!events.length) {
-            scheduleList.innerHTML = "<div class=\"scheduleEmpty\">No events scheduled for the rest of today.</div>";
-        } else {
-            events.slice(0, maxEvents).forEach(evt => {
-                const item = document.createElement("div");
-                item.className = "scheduleItem";
-                const timeLabel = formatTimeLabel(evt.start, evt.allDay, use24h);
-                item.innerHTML =
-                    "<div class=\"scheduleTime\">" + timeLabel + "</div>" +
-                    "<div class=\"scheduleTitle\">" + evt.title + "</div>";
-                scheduleList.appendChild(item);
-            });
-        }
-    } catch (e) {
-        console.error("Schedule parse error", e);
-    }
+  wrapper.appendChild(row);
+  return wrapper;
 }
 
-/* ===== RADAR (Leaflet + RainViewer + base map) ===== */
-async function initRadarMap() {
-    const mapContainer = document.getElementById("radarMap");
-    if (!mapContainer) return;
-    if (typeof L === "undefined") {
-        console.error("Leaflet not loaded; radar disabled.");
-        return;
+function buildHourlyInner() {
+  const wrapper = document.createElement("div");
+  const strip = document.createElement("div");
+  strip.className = "hourlyStrip";
+  strip.id = "hourlyStrip";
+  wrapper.appendChild(strip);
+  return wrapper;
+}
+
+function buildScheduleInner() {
+  const wrapper = document.createElement("div");
+  const dateLabel = document.createElement("div");
+  dateLabel.id = "scheduleDateLabel";
+  dateLabel.style.fontSize = "13px";
+  dateLabel.style.color   = "var(--text-soft)";
+  wrapper.appendChild(dateLabel);
+
+  const list = document.createElement("div");
+  list.className = "scheduleList";
+  list.id = "scheduleList";
+  wrapper.appendChild(list);
+  return wrapper;
+}
+
+function buildCamDiscoverInner(tileCfg) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "camDiscover";
+
+  const status = document.createElement("div");
+  status.className = "camDiscoverStatus";
+  status.textContent = "Idle. Hold scan to search.";
+  wrapper.appendChild(status);
+
+  const preview = document.createElement("div");
+  preview.className = "camDiscoverPreview";
+  const img = document.createElement("img");
+  img.className = "camDiscoverImg";
+  img.style.display = "none";
+  preview.appendChild(img);
+
+  const meta = document.createElement("div");
+  meta.className = "camDiscoverMeta";
+  meta.textContent = "No camera discovered yet.";
+  preview.appendChild(meta);
+
+  wrapper.appendChild(preview);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "camDiscoverButtons";
+  const scanBtn = document.createElement("button");
+  scanBtn.textContent = "Scan subnet";
+  const applyBtn = document.createElement("button");
+  applyBtn.textContent = "Apply to Cam 1";
+  btnRow.appendChild(scanBtn);
+  btnRow.appendChild(applyBtn);
+  wrapper.appendChild(btnRow);
+
+  scanBtn.addEventListener("click", async () => {
+    scanBtn.disabled = true;
+    applyBtn.disabled = true;
+    await runCameraDiscovery(wrapper, tileCfg);
+    scanBtn.disabled = false;
+    applyBtn.disabled = false;
+  });
+
+  applyBtn.addEventListener("click", () => {
+    const cfg = tileCfg.config;
+    if (!cfg.discoveredIp || !cfg.discoveredPath) {
+      alert("No discovered camera yet. Scan first.");
+      return;
     }
-
-    if (!radarMap) {
-        radarMap = L.map("radarMap", {
-            zoomControl: true,
-            attributionControl: false
-        });
+    const cam1 = getTile("cam1");
+    if (cam1) {
+      cam1.config.url = "http://" + cfg.discoveredIp;
+      cam1.config.username = cfg.username || "";
+      cam1.config.password = cfg.password || "";
+      saveState();
+      renderAllTiles();
+      alert("Applied to Cam 1.");
     }
+  });
 
-    const cfg = state.tiles.radar.config;
-    const lat = (lastLat != null && cfg.gpsLock) ? lastLat : 36.03;
-    const lon = (lastLon != null && cfg.gpsLock) ? lastLon : -84.15;
-    radarMap.setView([lat, lon], 8);
+  // existing discovered info?
+  if (tileCfg.config.discoveredIp && tileCfg.config.discoveredPath) {
+    const url = buildDiscoveredUrl(tileCfg.config);
+    img.src = url;
+    img.style.display = "block";
+    meta.textContent = tileCfg.config.discoveredIp + " " + tileCfg.config.discoveredPath;
+    status.textContent = "Previously discovered camera.";
+  }
 
-    if (radarBaseLayer) {
-        radarMap.removeLayer(radarBaseLayer);
-        radarBaseLayer = null;
-    }
+  return wrapper;
+}
 
-    const base = cfg.baseLayer || "dark";
-    if (base === "light") {
-        radarBaseLayer = L.tileLayer(
-            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            { maxZoom: 18 }
-        ).addTo(radarMap);
-    } else if (base === "osm") {
-        radarBaseLayer = L.tileLayer(
-            "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-            { maxZoom: 18 }
-        ).addTo(radarMap);
-    } else {
-        radarBaseLayer = L.tileLayer(
-            "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-            { maxZoom: 18 }
-        ).addTo(radarMap);
-    }
+function buildSpeedInner(tileCfg) {
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.height = "100%";
 
-    await loadRadarData();
+  const stats = document.createElement("div");
+  stats.className = "speedStats";
+  stats.innerHTML = `
+    <div class="speedLine">
+      <div class="speedLabel">Ping</div>
+      <div class="speedValue speedPingVal statusWarn">-- ms</div>
+    </div>
+    <div class="speedLine">
+      <div class="speedLabel">Download</div>
+      <div class="speedValue speedDownVal statusWarn">-- Mbps</div>
+    </div>
+  `;
+  wrapper.appendChild(stats);
+
+  const btn = document.createElement("button");
+  btn.className = "speedBtn";
+  btn.textContent = "Run speed & ping";
+  btn.addEventListener("click", () => {
+    runPingForTile();
+    runSpeedTestForTile();
+  });
+  wrapper.appendChild(btn);
+
+  return wrapper;
+}
+
+/* ========= NOW TILE RENDER ========= */
+function updateClock() {
+  const now = new Date();
+  const tEl = document.getElementById("nowTime");
+  const dEl = document.getElementById("nowDate");
+  if (!tEl || !dEl) return;
+  tEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  dEl.textContent = now.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+setInterval(updateClock, 1000);
+
+function renderNowTile() {
+  if (!window.__weatherData) return;
+  const data = window.__weatherData;
+  const current = data.list[0];
+
+  const iconEl = document.getElementById("nowIcon");
+  const tempEl = document.getElementById("nowTemp");
+  const descEl = document.getElementById("nowDesc");
+  const rainEl = document.getElementById("nowRain");
+  if (!iconEl) return;
+
+  const icon = current.weather[0].icon;
+  const temp = Math.round(current.main.temp);
+  const desc = current.weather[0].description;
+  const pop  = Math.round((current.pop || 0) * 100);
+
+  iconEl.src = "https://openweathermap.org/img/wn/" + icon + "@2x.png";
+  tempEl.textContent = temp + "°F";
+  descEl.textContent = desc;
+  rainEl.textContent = pop + "% 🌧️";
+}
+
+/* ========= HOURLY TILE RENDER ========= */
+function renderHourlyTile() {
+  if (!window.__weatherData) return;
+  const strip = document.getElementById("hourlyStrip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  const list = window.__weatherData.list.slice(0, 12);
+  list.forEach(hr => {
+    const t = new Date(hr.dt * 1000).toLocaleTimeString([], { hour: "numeric" });
+    const hrTemp = Math.round(hr.main.temp);
+    const icon = hr.weather[0].icon;
+    const pop = Math.round((hr.pop || 0) * 100);
+    const item = document.createElement("div");
+    item.className = "hourItem";
+    item.innerHTML = `
+      <div>${t}</div>
+      <img src="https://openweathermap.org/img/wn/${icon}.png" alt="">
+      <div class="hourTemp">${hrTemp}°F</div>
+      <div class="hourRain">${pop}% 🌧️</div>
+    `;
+    strip.appendChild(item);
+  });
+}
+
+/* ========= RADAR ========= */
+async function initRadar() {
+  const mapDiv = document.getElementById("radarMap");
+  if (!mapDiv) return;
+  if (typeof L === "undefined") {
+    console.error("Leaflet not available");
+    return;
+  }
+
+  const radarTile = getTile("radar");
+  const cfg = radarTile.config;
+  const lat = (lastLat != null && cfg.gpsLock) ? lastLat : 36.03;
+  const lon = (lastLon != null && cfg.gpsLock) ? lastLon : -84.15;
+
+  if (!radarMap) {
+    radarMap = L.map("radarMap", {
+      zoomControl: true,
+      attributionControl: false
+    });
+  } else {
+    radarMap.invalidateSize();
+  }
+
+  radarMap.setView([lat, lon], 8);
+
+  if (radarBaseLayer) {
+    radarMap.removeLayer(radarBaseLayer);
+  }
+  const base = cfg.baseLayer || "dark";
+  if (base === "light") {
+    radarBaseLayer = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }
+    ).addTo(radarMap);
+  } else if (base === "osm") {
+    radarBaseLayer = L.tileLayer(
+      "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", { maxZoom: 18 }
+    ).addTo(radarMap);
+  } else {
+    radarBaseLayer = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", { maxZoom: 18 }
+    ).addTo(radarMap);
+  }
+
+  await loadRadarData();
 }
 
 async function loadRadarData() {
-    try {
-        const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
-        const data = await res.json();
-        radarHost = data.host || "https://tilecache.rainviewer.com";
+  try {
+    const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+    const data = await res.json();
+    radarHost = data.host || "https://tilecache.rainviewer.com";
+    const past = data.radar && data.radar.past ? data.radar.past : [];
+    if (!past.length) return;
+    radarFrames = past.slice(-8);
+    radarFrameIndex = 0;
+    updateRadarLayer();
 
-        const past = data.radar && data.radar.past ? data.radar.past : [];
-        if (!past.length) return;
-
-        radarFrames = past.slice(-10);
-        radarFrameIndex = 0;
-        updateRadarLayer();
-
-        if (radarAnimTimer) clearInterval(radarAnimTimer);
-        const speed = state.tiles.radar.config.animSpeedMs || 700;
-        radarAnimTimer = setInterval(() => {
-            radarFrameIndex = (radarFrameIndex + 1) % radarFrames.length;
-            updateRadarLayer();
-        }, speed);
-    } catch (e) {
-        console.error("Radar data error:", e);
-    }
+    if (radarAnimTimer) clearInterval(radarAnimTimer);
+    const cfg = getTile("radar").config;
+    const speed = cfg.animSpeedMs || 700;
+    radarAnimTimer = setInterval(() => {
+      radarFrameIndex = (radarFrameIndex + 1) % radarFrames.length;
+      updateRadarLayer();
+    }, speed);
+  } catch (e) {
+    console.error("Radar data error", e);
+  }
 }
 
-function buildRadarTileUrl(framePath) {
-    const base = radarHost + framePath;
-    return base + "/256/{z}/{x}/{y}/2/1_1.png";
+function radarTileUrl(framePath) {
+  return radarHost + framePath + "/256/{z}/{x}/{y}/2/1_1.png";
 }
 
 function updateRadarLayer() {
-    if (!radarMap || !radarFrames.length) return;
-    const frame = radarFrames[radarFrameIndex];
-    const cfg = state.tiles.radar.config;
-    const urlTemplate = buildRadarTileUrl(frame.path);
-    const opacity = cfg.rain ? (cfg.opacity || 0.7) : 0.0;
+  if (!radarMap || !radarFrames.length) return;
+  const frame = radarFrames[radarFrameIndex];
+  const cfg = getTile("radar").config;
+  const urlTemplate = radarTileUrl(frame.path);
+  const opacity = cfg.rain ? (cfg.opacity || 0.7) : 0.0;
 
-    if (radarLayer) {
-        radarLayer.setUrl(urlTemplate);
-        radarLayer.setOpacity(opacity);
-    } else {
-        radarLayer = L.tileLayer(urlTemplate, { opacity });
-        radarLayer.addTo(radarMap);
-    }
+  if (radarLayer) {
+    radarLayer.setUrl(urlTemplate);
+    radarLayer.setOpacity(opacity);
+  } else {
+    radarLayer = L.tileLayer(urlTemplate, { opacity });
+    radarLayer.addTo(radarMap);
+  }
 }
 
-/* ===== SPEED TILE ===== */
-function setStatusColor(el, val, type) {
-    let cls = "statusGood";
-    if (type === "ping") {
-        if (val > 200) cls = "statusBad";
-        else if (val > 80) cls = "statusWarn";
-    } else if (type === "speed") {
-        if (val < 5) cls = "statusBad";
-        else if (val < 20) cls = "statusWarn";
-    }
-    el.classList.remove("statusGood", "statusWarn", "statusBad");
-    el.classList.add(cls);
+/* ========= ICS SCHEDULE ========= */
+function parseICSTime(dtVal) {
+  const datePart = dtVal.slice(0, 8);
+  const year = parseInt(datePart.slice(0, 4), 10);
+  const month = parseInt(datePart.slice(4, 6), 10) - 1;
+  const day = parseInt(datePart.slice(6, 8), 10);
+  if (dtVal.length > 8) {
+    const timePart = dtVal.slice(9, 15);
+    const hour = parseInt(timePart.slice(0, 2), 10);
+    const minute = parseInt(timePart.slice(2, 4), 10);
+    const second = parseInt(timePart.slice(4, 6), 10);
+    return new Date(Date.UTC(year, month, day, hour, minute, second));
+  } else {
+    return new Date(year, month, day);
+  }
 }
 
-async function runPingForTile() {
-    const tileEl = document.querySelector('[data-id="speed"]');
-    if (!tileEl) return;
-    const pingEl = tileEl.querySelector(".speedPingVal");
-    const cfg = state.tiles.speed.config;
-    const url = cfg.pingTarget || defaultState.tiles.speed.config.pingTarget;
-
-    const start = performance.now();
-    try {
-        await fetch(url, { cache: "no-store" });
-        const ms = Math.round(performance.now() - start);
-        pingEl.textContent = ms + " ms";
-        setStatusColor(pingEl, ms, "ping");
-        updateLastUpdate();
-    } catch (err) {
-        console.error("Ping error:", err);
-        pingEl.textContent = "offline";
-        pingEl.classList.remove("statusGood", "statusWarn");
-        pingEl.classList.add("statusBad");
-    }
+function formatTimeLabel(dateObj, allDay, use24h) {
+  if (allDay) return "All day";
+  return dateObj.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: !use24h });
 }
 
-async function runSpeedTestForTile() {
-    const tileEl = document.querySelector('[data-id="speed"]');
-    if (!tileEl) return;
-    const speedEl = tileEl.querySelector(".speedDownVal");
-    const cfg = state.tiles.speed.config;
-    const url = cfg.speedUrl || defaultState.tiles.speed.config.speedUrl;
+function renderScheduleTile() {
+  const dateLabel = document.getElementById("scheduleDateLabel");
+  const list = document.getElementById("scheduleList");
+  if (!dateLabel || !list) return;
 
-    try {
-        const start = performance.now();
-        const response = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), {
-            cache: "no-store"
-        });
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10).replace(/-/g, "");
+  dateLabel.textContent = now.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric"
+  });
 
-        if (!response.body) {
-            const buf = await response.arrayBuffer();
-            const durationSec = (performance.now() - start) / 1000;
-            const bits = buf.byteLength * 8;
-            const mbps = (bits / durationSec) / 1e6;
-            const val = mbps.toFixed(1);
-            speedEl.textContent = val + " Mbps";
-            setStatusColor(speedEl, mbps, "speed");
-            updateLastUpdate();
-            return;
-        }
+  const text = (state.icsRaw || "").trim();
+  if (!text) {
+    list.innerHTML = "<div class=\"scheduleEmpty\">Paste ICS in config (not yet wired UI) to see schedule.</div>";
+    return;
+  }
 
-        const reader = response.body.getReader();
-        let received = 0;
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            received += value.length;
-        }
-        const durationSec = (performance.now() - start) / 1000;
-        const bits = received * 8;
-        const mbps = (bits / durationSec) / 1e6;
+  const cfg = getTile("schedule").config;
+  const showPast = !!cfg.showPast;
+  const maxEvents = cfg.maxEvents || 20;
+  const use24h = !!cfg.timeFormat24;
 
-        speedEl.textContent = mbps.toFixed(1) + " Mbps";
-        setStatusColor(speedEl, mbps, "speed");
-        updateLastUpdate();
-    } catch (err) {
-        console.error("Speedtest failed:", err);
-        speedEl.textContent = "ERR";
-        speedEl.classList.remove("statusGood");
-        speedEl.classList.add("statusBad");
-    }
+  const blocks = text.split("BEGIN:VEVENT").slice(1);
+  const events = [];
+
+  blocks.forEach(blockRaw => {
+    const block = "BEGIN:VEVENT" + blockRaw;
+    const lines = block.split(/\r?\n/);
+    const dtStartLine = lines.find(l => l.startsWith("DTSTART"));
+    const summaryLine = lines.find(l => l.startsWith("SUMMARY:"));
+    if (!dtStartLine || !summaryLine) return;
+    const dtVal = dtStartLine.split(":")[1].trim();
+    const dateKey = dtVal.slice(0, 8);
+    if (dateKey !== todayKey) return;
+    const allDay = dtVal.length === 8;
+    const startDate = parseICSTime(dtVal);
+    const title = summaryLine.slice("SUMMARY:".length).trim();
+    if (!showPast && !allDay && startDate < now) return;
+    events.push({ start: startDate, allDay, title });
+  });
+
+  events.sort((a, b) => a.start - b.start);
+  list.innerHTML = "";
+
+  if (!events.length) {
+    list.innerHTML = "<div class=\"scheduleEmpty\">No events for the rest of today.</div>";
+  } else {
+    events.slice(0, maxEvents).forEach(evt => {
+      const item = document.createElement("div");
+      item.className = "scheduleItem";
+      const timeLabel = formatTimeLabel(evt.start, evt.allDay, use24h);
+      item.innerHTML = `
+        <div class="scheduleTime">${timeLabel}</div>
+        <div class="scheduleTitle">${evt.title}</div>
+      `;
+      list.appendChild(item);
+    });
+  }
 }
 
-/* ===== CAMERA STREAM URL BUILDER (known MJPEG path) ===== */
+/* ========= CAMERA STREAMS ========= */
 function buildCamStreamUrl(base, user, pass) {
-    try {
-        let u = new URL(base);
-        u.pathname = "/cgi-bin/mjpg/video.cgi";
-        u.search = "channel=1&subtype=1&t=" + Date.now();
-        if (user) u.username = user;
-        if (pass) u.password = pass;
-        return u.toString();
-    } catch (e) {
-        console.error("Camera URL build error", e);
-        return base;
-    }
+  try {
+    let u = new URL(base);
+    u.pathname = "/cgi-bin/mjpg/video.cgi";
+    u.search = "channel=1&subtype=1&t=" + Date.now();
+    if (user) u.username = user;
+    if (pass) u.password = pass;
+    return u.toString();
+  } catch (e) {
+    console.error("Cam URL error", e);
+    return base;
+  }
+}
+function setupCamStream(img, cfg) {
+  function refresh() {
+    img.src = buildCamStreamUrl(cfg.config.url, cfg.config.username, cfg.config.password);
+  }
+  refresh();
+  setInterval(refresh, 20000);
 }
 
-/* ===== CAMERA DISCOVERY SUPPORT ===== */
+/* ========= CAMERA DISCOVERY ========= */
 function probeImage(url, timeoutMs = 2000) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        let done = false;
-        const timer = setTimeout(() => {
-            if (done) return;
-            done = true;
-            resolve(false);
-        }, timeoutMs);
-        img.onload = () => {
-            if (done) return;
-            done = true;
-            clearTimeout(timer);
-            resolve(true);
-        };
-        img.onerror = () => {
-            if (done) return;
-            done = true;
-            clearTimeout(timer);
-            resolve(false);
-        };
-        img.src = url;
-    });
+  return new Promise(resolve => {
+    const img = new Image();
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(false);
+    }, timeoutMs);
+    img.onload = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(true);
+    };
+    img.onerror = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
+function buildDiscoveredUrl(cfg) {
+  try {
+    const base = "http://" + cfg.discoveredIp;
+    let u = new URL(base);
+    u.pathname = cfg.discoveredPath.split("?")[0];
+    const qs = cfg.discoveredPath.includes("?") ? cfg.discoveredPath.split("?")[1] : "";
+    const ts = "t=" + Date.now();
+    u.search = qs ? (qs + "&" + ts) : ts;
+    if (cfg.username) u.username = cfg.username;
+    if (cfg.password) u.password = cfg.password;
+    return u.toString();
+  } catch {
+    return "";
+  }
 }
 
-async function runCameraDiscovery(tileEl) {
-    const statusEl = tileEl.querySelector(".camDiscoverStatus");
-    const foundContainer = tileEl.querySelector(".camDiscoverFound");
-    const metaEl = tileEl.querySelector(".camDiscoverMeta");
-    const imgEl = tileEl.querySelector(".camDiscoverImg");
+async function runCameraDiscovery(wrapper, tileCfg) {
+  const statusEl = wrapper.querySelector(".camDiscoverStatus");
+  const imgEl = wrapper.querySelector(".camDiscoverImg");
+  const metaEl = wrapper.querySelector(".camDiscoverMeta");
+  const subnet = state.cameraScanSubnetPrefix || "192.168.1.";
+  statusEl.textContent = "Scanning subnet " + subnet + "1–254...";
 
-    const subnet = state.cameraScanSubnetPrefix || "192.168.1.";
-    statusEl.textContent = "Scanning subnet " + subnet + "1–254 for cameras...";
-    foundContainer.style.background = "rgba(0,0,0,0.5)";
+  const paths = [
+    "/cgi-bin/mjpg/video.cgi?channel=1&subtype=1",
+    "/cgi-bin/mjpg/video.cgi?channel=0&subtype=1",
+    "/mjpeg",
+    "/mjpegstream",
+    "/video.mjpeg",
+    "/cgi-bin/video.cgi",
+    "/cgi-bin/stream",
+    "/snapshot.jpg",
+    "/image.jpg",
+    "/cgi-bin/snapshot.cgi"
+  ];
+  const creds = [
+    { user: "", pass: "" },
+    { user: "admin", pass: "admin" },
+    { user: "admin", pass: "" },
+    { user: "admin", pass: "12345" },
+    { user: "user",  pass: "user" },
+    { user: "root",  pass: "root" }
+  ];
+
+  let found = null;
+
+  outer:
+  for (let host = 1; host <= 254; host++) {
+    const ip = subnet + host;
+    statusEl.textContent = "Testing " + ip + "...";
+    for (const path of paths) {
+      for (const c of creds) {
+        try {
+          let u = new URL("http://" + ip);
+          u.pathname = path.split("?")[0];
+          const qs = path.includes("?") ? path.split("?")[1] : "";
+          const ts = "t=" + Date.now();
+          u.search = qs ? (qs + "&" + ts) : ts;
+          if (c.user) u.username = c.user;
+          if (c.pass) u.password = c.pass;
+          const testUrl = u.toString();
+          const ok = await probeImage(testUrl, 1400);
+          if (ok) {
+            found = {
+              ip,
+              path,
+              username: c.user,
+              password: c.pass
+            };
+            break outer;
+          }
+        } catch (e) {
+          console.error("Probe error", e);
+        }
+      }
+    }
+  }
+
+  if (!found) {
+    statusEl.textContent = "Scan complete — no cameras found.";
     imgEl.style.display = "none";
-    metaEl.textContent = "Scanning...";
+    metaEl.textContent = "No match.";
+    return;
+  }
 
-    const paths = [
-        "/cgi-bin/mjpg/video.cgi?channel=1&subtype=1",
-        "/cgi-bin/mjpg/video.cgi?channel=0&subtype=1",
-        "/mjpeg",
-        "/mjpegstream",
-        "/video.mjpeg",
-        "/cgi-bin/video.cgi",
-        "/cgi-bin/stream",
-        "/snapshot.jpg",
-        "/image.jpg",
-        "/cgi-bin/snapshot.cgi"
-    ];
+  tileCfg.config.discoveredIp = found.ip;
+  tileCfg.config.discoveredPath = found.path;
+  tileCfg.config.username = found.username;
+  tileCfg.config.password = found.password;
+  saveState();
 
-    const creds = [
-        { user: "",       pass: "" },
-        { user: "admin",  pass: "admin" },
-        { user: "admin",  pass: "" },
-        { user: "admin",  pass: "12345" },
-        { user: "user",   pass: "user" },
-        { user: "root",   pass: "root" }
-    ];
-
-    let found = null;
-
-    outer:
-    for (let host = 1; host <= 254; host++) {
-        const ip = subnet + host;
-        statusEl.textContent = "Testing " + ip + "...";
-        for (const path of paths) {
-            for (const c of creds) {
-                try {
-                    const base = "http://" + ip;
-                    let u = new URL(base);
-                    u.pathname = path.split("?")[0];
-                    const existingSearch = path.includes("?") ? path.split("?")[1] : "";
-                    const ts = "t=" + Date.now();
-                    u.search = existingSearch ? (existingSearch + "&" + ts) : ts;
-                    if (c.user) u.username = c.user;
-                    if (c.pass) u.password = c.pass;
-                    const testUrl = u.toString();
-
-                    const ok = await probeImage(testUrl, 1400);
-                    if (ok) {
-                        found = {
-                            ip,
-                            path,
-                            username: c.user,
-                            password: c.pass,
-                            streamUrl: testUrl
-                        };
-                        break outer;
-                    }
-                } catch (e) {
-                    console.error("Probe error", e);
-                }
-            }
-        }
-    }
-
-    if (!found) {
-        statusEl.textContent = "Scan complete — no cameras found on " + subnet + "1–254.";
-        imgEl.style.display = "none";
-        metaEl.textContent = "No match.";
-        return;
-    }
-
-    // Save discovery
-    const cfg = state.tiles.cameraDiscovery.config;
-    cfg.discoveredIp = found.ip;
-    cfg.discoveredPath = found.path;
-    cfg.username = found.username;
-    cfg.password = found.password;
-    saveState();
-
-    statusEl.textContent = "Camera found at " + found.ip;
-    imgEl.src = found.streamUrl;
-    imgEl.style.display = "block";
-    metaEl.textContent = found.ip + " " + found.path +
-        (found.username ? (" [" + found.username + "]") : "");
+  statusEl.textContent = "Camera found at " + found.ip;
+  const url = buildDiscoveredUrl(tileCfg.config);
+  imgEl.src = url;
+  imgEl.style.display = "block";
+  metaEl.textContent = found.ip + " " + found.path +
+    (found.username ? (" [" + found.username + "]") : "");
 }
 
-/* ===== TILE RENDERING ===== */
-function getEnabledTilesSorted() {
-    return Object.values(state.tiles)
-        .filter(t => t.enabled)
-        .sort((a, b) => (a.order || 999) - (b.order || 999));
+/* ========= SPEED / PING ========= */
+function setStatusColor(el, val, type) {
+  let cls = "statusGood";
+  if (type === "ping") {
+    if (val > 200) cls = "statusBad";
+    else if (val > 80) cls = "statusWarn";
+  } else if (type === "speed") {
+    if (val < 5) cls = "statusBad";
+    else if (val < 20) cls = "statusWarn";
+  }
+  el.classList.remove("statusGood", "statusWarn", "statusBad");
+  el.classList.add(cls);
 }
-
-function renderTiles() {
-    const container = document.getElementById("tilesArea");
-    container.innerHTML = "";
-    const tiles = getEnabledTilesSorted();
-
-    if (!tiles.length) {
-        const empty = document.createElement("div");
-        empty.className = "scheduleEmpty glass";
-        empty.style.padding = "12px 14px";
-        empty.textContent = "No tiles enabled. Open settings to enable schedule, cameras, radar, speed, or Camera Discovery.";
-        container.appendChild(empty);
-        return;
-    }
-
-    tiles.forEach(t => {
-        const tile = document.createElement("div");
-        tile.className = "tile glass";
-        tile.dataset.id = t.id;
-        if (t.size === "large") tile.classList.add("tile-large");
-
-        const label = document.createElement("span");
-        label.className = "camLabel";
-        label.textContent = t.label;
-        tile.appendChild(label);
-
-        const gear = document.createElement("button");
-        gear.className = "tileGear";
-        gear.textContent = "⚙";
-        gear.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (state.lockTiles) return;
-            openTileSettings(t.id);
-        });
-        tile.appendChild(gear);
-
-        if (t.type === "cam") {
-            const img = document.createElement("img");
-            img.alt = t.label;
-            const streamUrl = buildCamStreamUrl(
-                t.config.url,
-                t.config.username,
-                t.config.password
-            );
-            img.src = streamUrl;
-            img.style.objectFit = "cover";
-
-            setInterval(() => {
-                img.src = buildCamStreamUrl(
-                    t.config.url,
-                    t.config.username,
-                    t.config.password
-                );
-            }, 20000);
-
-            tile.appendChild(img);
-        } else if (t.type === "schedule") {
-            const sched = document.createElement("div");
-            sched.className = "scheduleTile";
-            sched.innerHTML = `
-                <div id="scheduleDateLabel"></div>
-                <div id="scheduleList"></div>
-            `;
-            tile.appendChild(sched);
-        } else if (t.type === "radar") {
-            const mapDiv = document.createElement("div");
-            mapDiv.id = "radarMap";
-            tile.appendChild(mapDiv);
-        } else if (t.type === "speed") {
-            const sp = document.createElement("div");
-            sp.className = "speedTileContent";
-            sp.innerHTML = `
-                <div class="speedStats">
-                    <div>
-                        <div class="speedLabel">Ping</div>
-                        <div class="speedValue speedPingVal statusWarn">-- ms</div>
-                    </div>
-                    <div>
-                        <div class="speedLabel">Download</div>
-                        <div class="speedValue speedDownVal statusWarn">-- Mbps</div>
-                    </div>
-                </div>
-                <button class="speedButton">Run Speed &amp; Ping</button>
-            `;
-            tile.appendChild(sp);
-            sp.querySelector(".speedButton").addEventListener("click", () => {
-                runPingForTile();
-                runSpeedTestForTile();
-            });
-        } else if (t.type === "camAuto") {
-            const cfg = t.config;
-            const cd = document.createElement("div");
-            cd.className = "camDiscoverTile";
-            cd.innerHTML = `
-                <div class="camDiscoverStatus">Idle. Subnet: ${state.cameraScanSubnetPrefix || "192.168.1."}</div>
-                <div class="camDiscoverFound">
-                    <img class="camDiscoverImg" style="display:none;" alt="Discovered camera">
-                    <div class="camDiscoverMeta">No camera discovered yet.</div>
-                </div>
-                <div class="camDiscoverBtnRow">
-                    <button class="camDiscoverScanBtn">Scan for Cameras</button>
-                    <button class="camDiscoverUseBtn">Apply to Cam 1</button>
-                </div>
-            `;
-            tile.appendChild(cd);
-
-            const statusEl = cd.querySelector(".camDiscoverStatus");
-            const imgEl = cd.querySelector(".camDiscoverImg");
-            const metaEl = cd.querySelector(".camDiscoverMeta");
-            const scanBtn = cd.querySelector(".camDiscoverScanBtn");
-            const useBtn = cd.querySelector(".camDiscoverUseBtn");
-
-            // If we already discovered one earlier, show it
-            if (cfg.discoveredIp && cfg.discoveredPath) {
-                try {
-                    const base = "http://" + cfg.discoveredIp;
-                    let u = new URL(base);
-                    u.pathname = cfg.discoveredPath.split("?")[0];
-                    const existingSearch = cfg.discoveredPath.includes("?")
-                        ? cfg.discoveredPath.split("?")[1]
-                        : "";
-                    const ts = "t=" + Date.now();
-                    u.search = existingSearch ? (existingSearch + "&" + ts) : ts;
-                    if (cfg.username) u.username = cfg.username;
-                    if (cfg.password) u.password = cfg.password;
-                    const url = u.toString();
-                    imgEl.src = url;
-                    imgEl.style.display = "block";
-                    metaEl.textContent = cfg.discoveredIp + " " + cfg.discoveredPath +
-                        (cfg.username ? (" [" + cfg.username + "]") : "");
-                    statusEl.textContent = "Previously discovered camera.";
-                } catch (e) {
-                    console.error("Error rebuilding discovered stream", e);
-                }
-            }
-
-            scanBtn.addEventListener("click", async () => {
-                scanBtn.disabled = true;
-                useBtn.disabled = true;
-                await runCameraDiscovery(tile);
-                scanBtn.disabled = false;
-                useBtn.disabled = false;
-            });
-
-            useBtn.addEventListener("click", () => {
-                if (!cfg.discoveredIp || !cfg.discoveredPath) {
-                    alert("No discovered camera to apply yet. Run a scan first.");
-                    return;
-                }
-                const cam1 = state.tiles.cam1;
-                cam1.config.url = "http://" + cfg.discoveredIp;
-                cam1.config.username = cfg.username || "";
-                cam1.config.password = cfg.password || "";
-                saveState();
-                alert("Applied discovered camera to Cam 1 tile.");
-                applyGlobalState();
-            });
-        }
-
-        const settingsPanel = document.createElement("div");
-        settingsPanel.className = "tileSettingsPanel";
-        settingsPanel.style.display = "none";
-        settingsPanel.innerHTML = buildTileSettingsHtml(t);
-        tile.appendChild(settingsPanel);
-
-        container.appendChild(tile);
-        attachLongPress(tile, t.id);
+async function runPingForTile() {
+  const tile = document.querySelector('.tile[data-id="speed"]');
+  if (!tile) return;
+  const pingEl = tile.querySelector(".speedPingVal");
+  const cfg = getTile("speed").config;
+  const url = cfg.pingTarget || defaultState.tiles.find(t => t.id === "speed").config.pingTarget;
+  const start = performance.now();
+  try {
+    await fetch(url, { cache: "no-store" });
+    const ms = Math.round(performance.now() - start);
+    pingEl.textContent = ms + " ms";
+    setStatusColor(pingEl, ms, "ping");
+  } catch {
+    pingEl.textContent = "offline";
+    pingEl.classList.remove("statusGood", "statusWarn");
+    pingEl.classList.add("statusBad");
+  }
+}
+async function runSpeedTestForTile() {
+  const tile = document.querySelector('.tile[data-id="speed"]');
+  if (!tile) return;
+  const speedEl = tile.querySelector(".speedDownVal");
+  const cfg = getTile("speed").config;
+  const url = cfg.speedUrl || defaultState.tiles.find(t => t.id === "speed").config.speedUrl;
+  try {
+    const start = performance.now();
+    const response = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), {
+      cache: "no-store"
     });
-
-    loadScheduleIntoDOM();
-    if (state.tiles.radar.enabled) {
-        initRadarMap();
-    }
-
-    setupDragForTiles();
-}
-
-/* ===== TILE SETTINGS HTML ===== */
-function buildTileSettingsHtml(tileConfig) {
-    const common = `
-        <div class="tileSettingsRow">
-            <label>Label
-                <input type="text" class="ts-label" value="${tileConfig.label}">
-            </label>
-            <label>Size
-                <select class="ts-size">
-                    <option value="small" ${tileConfig.size === "small" ? "selected" : ""}>Small</option>
-                    <option value="large" ${tileConfig.size === "large" ? "selected" : ""}>Large</option>
-                </select>
-            </label>
-        </div>
-    `;
-
-    if (tileConfig.type === "cam") {
-        return `
-            <h4>${tileConfig.label} Settings</h4>
-            ${common}
-            <div class="tileSettingsRow">
-                <label>Base URL
-                    <input type="text" class="ts-cam-url" value="${tileConfig.config.url || ""}">
-                </label>
-            </div>
-            <div class="tileSettingsRow">
-                <label>Username
-                    <input type="text" class="ts-cam-user" value="${tileConfig.config.username || ""}">
-                </label>
-                <label>Password
-                    <input type="password" class="ts-cam-pass" value="${tileConfig.config.password || ""}">
-                </label>
-            </div>
-            <div class="tileSettingsButtons">
-                <button class="ts-test">Test Stream</button>
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
-    } else if (tileConfig.type === "schedule") {
-        return `
-            <h4>Schedule Settings</h4>
-            ${common}
-            <div class="tileSettingsRow">
-                <label><input type="checkbox" class="ts-showPast" ${tileConfig.config.showPast ? "checked" : ""}> Show past events</label>
-                <label>Max events
-                    <input type="number" min="1" max="100" class="ts-maxEvents" value="${tileConfig.config.maxEvents || 20}">
-                </label>
-                <label><input type="checkbox" class="ts-24h" ${tileConfig.config.timeFormat24 ? "checked" : ""}> 24h time</label>
-            </div>
-            <div class="tileSettingsButtons">
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
-    } else if (tileConfig.type === "radar") {
-        return `
-            <h4>${tileConfig.label} Settings</h4>
-            ${common}
-            <div class="tileSettingsRow">
-                <label><input type="checkbox" class="ts-rain" ${tileConfig.config.rain ? "checked" : ""}> Rain</label>
-                <label><input type="checkbox" class="ts-snow" ${tileConfig.config.snow ? "checked" : ""}> Snow</label>
-                <label><input type="checkbox" class="ts-clouds" ${tileConfig.config.clouds ? "checked" : ""}> Clouds</label>
-            </div>
-            <div class="tileSettingsRow">
-                <label>Opacity
-                    <input type="number" step="0.1" min="0" max="1" class="ts-opacity" value="${tileConfig.config.opacity || 0.7}">
-                </label>
-                <label>Anim speed (ms)
-                    <input type="number" min="200" max="2000" class="ts-animSpeed" value="${tileConfig.config.animSpeedMs || 700}">
-                </label>
-                <label><input type="checkbox" class="ts-gpsLock" ${tileConfig.config.gpsLock ? "checked" : ""}> Lock to GPS</label>
-            </div>
-            <div class="tileSettingsRow">
-                <label>Base map
-                    <select class="ts-baseLayer">
-                        <option value="dark" ${tileConfig.config.baseLayer === "dark" ? "selected" : ""}>Dark</option>
-                        <option value="light" ${tileConfig.config.baseLayer === "light" ? "selected" : ""}>Light</option>
-                        <option value="osm" ${tileConfig.config.baseLayer === "osm" ? "selected" : ""}>OSM Hot</option>
-                    </select>
-                </label>
-            </div>
-            <div class="tileSettingsButtons">
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
-    } else if (tileConfig.type === "speed") {
-        return `
-            <h4>Speed Tile Settings</h4>
-            ${common}
-            <div class="tileSettingsRow">
-                <label>Speedtest URL
-                    <input type="text" class="ts-speedUrl" value="${tileConfig.config.speedUrl || ""}">
-                </label>
-            </div>
-            <div class="tileSettingsRow">
-                <label>Ping target URL
-                    <input type="text" class="ts-pingTarget" value="${tileConfig.config.pingTarget || ""}">
-                </label>
-                <label>Auto interval (sec)
-                    <input type="number" min="30" max="3600" class="ts-autoInterval" value="${tileConfig.config.autoIntervalSec || 120}">
-                </label>
-            </div>
-            <div class="tileSettingsButtons">
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
-    } else if (tileConfig.type === "camAuto") {
-        return `
-            <h4>${tileConfig.label} Settings</h4>
-            ${common}
-            <div class="tileSettingsRow">
-                <label>Discovered IP
-                    <input type="text" class="ts-disc-ip" value="${tileConfig.config.discoveredIp || ""}">
-                </label>
-                <label>Path
-                    <input type="text" class="ts-disc-path" value="${tileConfig.config.discoveredPath || ""}">
-                </label>
-            </div>
-            <div class="tileSettingsRow">
-                <label>User
-                    <input type="text" class="ts-disc-user" value="${tileConfig.config.username || ""}">
-                </label>
-                <label>Pass
-                    <input type="password" class="ts-disc-pass" value="${tileConfig.config.password || ""}">
-                </label>
-            </div>
-            <div class="tileSettingsButtons">
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
+    let bytes = 0;
+    if (response.body) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.length;
+      }
     } else {
-        return `
-            <h4>${tileConfig.label} Settings</h4>
-            ${common}
-            <div class="tileSettingsButtons">
-                <button class="ts-reset">Reset</button>
-                <button class="ts-save">Save</button>
-            </div>
-        `;
+      const buf = await response.arrayBuffer();
+      bytes = buf.byteLength;
     }
+    const duration = (performance.now() - start) / 1000;
+    const bits = bytes * 8;
+    const mbps = (bits / duration) / 1e6;
+    speedEl.textContent = mbps.toFixed(1) + " Mbps";
+    setStatusColor(speedEl, mbps, "speed");
+  } catch (e) {
+    console.error("Speedtest error", e);
+    speedEl.textContent = "ERR";
+    speedEl.classList.remove("statusGood", "statusWarn");
+    speedEl.classList.add("statusBad");
+  }
 }
 
-/* ===== TILE SETTINGS HANDLERS ===== */
-function openTileSettings(tileId) {
-    const tileEl = document.querySelector(`.tile[data-id="${tileId}"]`);
-    if (!tileEl) return;
-    const panel = tileEl.querySelector(".tileSettingsPanel");
-    if (!panel) return;
+/* ========= TILE SETTINGS (very light for now) ========= */
+function buildTileSettingsHtml(tileCfg) {
+  let html = `
+    <h4>${tileCfg.label}</h4>
+    <div class="ts-row">
+      <label>Label
+        <input type="text" class="ts-label" value="${tileCfg.label}">
+      </label>
+    </div>
+  `;
+  if (tileCfg.type === "cam") {
+    html += `
+      <div class="ts-row">
+        <label>Base URL
+          <input type="text" class="ts-cam-url" value="${tileCfg.config.url || ""}">
+        </label>
+      </div>
+      <div class="ts-row">
+        <label>Username
+          <input type="text" class="ts-cam-user" value="${tileCfg.config.username || ""}">
+        </label>
+        <label>Password
+          <input type="password" class="ts-cam-pass" value="${tileCfg.config.password || ""}">
+        </label>
+      </div>
+    `;
+  } else if (tileCfg.type === "radar") {
+    html += `
+      <div class="ts-row">
+        <label><input type="checkbox" class="ts-rain" ${tileCfg.config.rain ? "checked" : ""}> Rain</label>
+        <label><input type="checkbox" class="ts-gps" ${tileCfg.config.gpsLock ? "checked" : ""}> GPS lock</label>
+      </div>
+    `;
+  } else if (tileCfg.type === "speed") {
+    html += `
+      <div class="ts-row">
+        <label>Speed URL
+          <input type="text" class="ts-speed-url" value="${tileCfg.config.speedUrl || ""}">
+        </label>
+      </div>
+      <div class="ts-row">
+        <label>Ping URL
+          <input type="text" class="ts-ping-url" value="${tileCfg.config.pingTarget || ""}">
+        </label>
+      </div>
+    `;
+  }
+  html += `
+    <div class="ts-buttons">
+      <button class="ts-reset">Reset</button>
+      <button class="ts-save">Save</button>
+    </div>
+  `;
+  return html;
+}
 
-    panel.style.display = "block";
+function attachSettingsHandlers(tileCfg, tileEl, panel) {
+  const resetBtn = panel.querySelector(".ts-reset");
+  const saveBtn  = panel.querySelector(".ts-save");
 
-    const cfg = state.tiles[tileId];
-    const labelInput = panel.querySelector(".ts-label");
-    const sizeSelect = panel.querySelector(".ts-size");
-    const resetBtn = panel.querySelector(".ts-reset");
-    const saveBtn = panel.querySelector(".ts-save");
-    const testBtn = panel.querySelector(".ts-test");
+  resetBtn.onclick = () => {
+    const def = defaultState.tiles.find(t => t.id === tileCfg.id);
+    if (!def) return;
+    tileCfg.label   = def.label;
+    tileCfg.colSpan = def.colSpan;
+    tileCfg.rowSpan = def.rowSpan;
+    tileCfg.config  = JSON.parse(JSON.stringify(def.config));
+    saveState();
+    renderAllTiles();
+  };
 
-    resetBtn.onclick = () => {
-        const def = defaultState.tiles[tileId];
-        if (!def) return;
-        state.tiles[tileId] = JSON.parse(JSON.stringify(def));
-        saveState();
-        applyGlobalState();
-    };
+  saveBtn.onclick = () => {
+    const lbl = panel.querySelector(".ts-label");
+    if (lbl) tileCfg.label = lbl.value.trim() || tileCfg.label;
 
-    if (testBtn && cfg.type === "cam") {
-        testBtn.onclick = () => {
-            const urlEl = panel.querySelector(".ts-cam-url");
-            const userEl = panel.querySelector(".ts-cam-user");
-            const passEl = panel.querySelector(".ts-cam-pass");
-
-            const testStream = buildCamStreamUrl(
-                urlEl.value.trim(),
-                userEl.value.trim(),
-                passEl.value
-            );
-
-            const testImg = new Image();
-            let done = false;
-            testImg.onload = () => {
-                if (done) return;
-                done = true;
-                alert("Stream OK — camera responded successfully!");
-            };
-            testImg.onerror = () => {
-                if (done) return;
-                done = true;
-                alert("Stream FAILED — check URL, username, or password/path.");
-            };
-            testImg.src = testStream;
-        };
+    if (tileCfg.type === "cam") {
+      const u = panel.querySelector(".ts-cam-url");
+      const usr = panel.querySelector(".ts-cam-user");
+      const pw = panel.querySelector(".ts-cam-pass");
+      tileCfg.config.url = u.value.trim() || tileCfg.config.url;
+      tileCfg.config.username = usr.value.trim();
+      tileCfg.config.password = pw.value;
+    } else if (tileCfg.type === "radar") {
+      const rain = panel.querySelector(".ts-rain");
+      const gps  = panel.querySelector(".ts-gps");
+      tileCfg.config.rain = !!rain?.checked;
+      tileCfg.config.gpsLock = !!gps?.checked;
+    } else if (tileCfg.type === "speed") {
+      const su = panel.querySelector(".ts-speed-url");
+      const pu = panel.querySelector(".ts-ping-url");
+      tileCfg.config.speedUrl = su.value.trim() || tileCfg.config.speedUrl;
+      tileCfg.config.pingTarget = pu.value.trim() || tileCfg.config.pingTarget;
     }
 
-    saveBtn.onclick = () => {
-        const newLabel = labelInput.value.trim() || cfg.label;
-        const newSize = sizeSelect.value === "large" ? "large" : "small";
-
-        cfg.label = newLabel;
-        cfg.size = newSize;
-
-        if (cfg.type === "cam") {
-            const urlEl = panel.querySelector(".ts-cam-url");
-            const userEl = panel.querySelector(".ts-cam-user");
-            const passEl = panel.querySelector(".ts-cam-pass");
-            cfg.config.url = (urlEl.value.trim() || cfg.config.url || "").trim();
-            cfg.config.username = userEl.value.trim();
-            cfg.config.password = passEl.value;
-        } else if (cfg.type === "schedule") {
-            cfg.config.showPast = panel.querySelector(".ts-showPast")?.checked || false;
-            const maxEv = parseInt(panel.querySelector(".ts-maxEvents")?.value || "20", 10);
-            cfg.config.maxEvents = isNaN(maxEv) ? 20 : maxEv;
-            cfg.config.timeFormat24 = panel.querySelector(".ts-24h")?.checked || false;
-        } else if (cfg.type === "radar") {
-            cfg.config.rain = panel.querySelector(".ts-rain")?.checked || false;
-            cfg.config.snow = panel.querySelector(".ts-snow")?.checked || false;
-            cfg.config.clouds = panel.querySelector(".ts-clouds")?.checked || false;
-            const op = parseFloat(panel.querySelector(".ts-opacity")?.value || "0.7");
-            cfg.config.opacity = isNaN(op) ? 0.7 : Math.min(Math.max(op, 0), 1);
-            const sp = parseInt(panel.querySelector(".ts-animSpeed")?.value || "700", 10);
-            cfg.config.animSpeedMs = isNaN(sp) ? 700 : sp;
-            cfg.config.gpsLock = panel.querySelector(".ts-gpsLock")?.checked || false;
-            cfg.config.baseLayer = panel.querySelector(".ts-baseLayer")?.value || "dark";
-        } else if (cfg.type === "speed") {
-            const sUrl = panel.querySelector(".ts-speedUrl")?.value || "";
-            const pUrl = panel.querySelector(".ts-pingTarget")?.value || "";
-            const iv = parseInt(panel.querySelector(".ts-autoInterval")?.value || "120", 10);
-            cfg.config.speedUrl = sUrl.trim() || defaultState.tiles.speed.config.speedUrl;
-            cfg.config.pingTarget = pUrl.trim() || defaultState.tiles.speed.config.pingTarget;
-            cfg.config.autoIntervalSec = isNaN(iv) ? 120 : iv;
-        } else if (cfg.type === "camAuto") {
-            cfg.config.discoveredIp = panel.querySelector(".ts-disc-ip")?.value.trim() || "";
-            cfg.config.discoveredPath = panel.querySelector(".ts-disc-path")?.value.trim() || "";
-            cfg.config.username = panel.querySelector(".ts-disc-user")?.value.trim() || "";
-            cfg.config.password = panel.querySelector(".ts-disc-pass")?.value || "";
-        }
-
-        saveState();
-        applyGlobalState();
-    };
+    saveState();
+    renderAllTiles();
+  };
 }
 
-/* ===== LONG PRESS EDIT MODE ===== */
-function attachLongPress(tileEl, tileId) {
-    let pressTimer = null;
-    let isPressed = false;
+/* ========= EDIT MODE & INTERACTIONS ========= */
+const editBar = document.getElementById("editBar");
+const editDoneBtn = document.getElementById("editDoneBtn");
+const editSettingsBtn = document.getElementById("editSettingsBtn");
 
-    const startPress = () => {
-        if (state.lockTiles) return;
-        if (pressTimer) clearTimeout(pressTimer);
-        isPressed = true;
-        pressTimer = setTimeout(() => {
-            if (!isPressed) return;
-            enterTileEditMode(tileEl);
-        }, 600);
-    };
-
-    const endPress = () => {
-        isPressed = false;
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-    };
-
-    tileEl.addEventListener("pointerdown", startPress);
-    tileEl.addEventListener("pointerup", endPress);
-    tileEl.addEventListener("pointerleave", endPress);
+function setEditMode(on) {
+  editMode = on;
+  applyEditModeVisuals();
 }
-
-function enterTileEditMode(tileEl) {
-    if (state.lockTiles) return;
-    tileEl.classList.add("editing");
-    const exit = (e) => {
-        if (!tileEl.contains(e.target)) {
-            tileEl.classList.remove("editing");
-            tileEl.style.transform = "";
-            tileEl.style.zIndex = "";
-            tileEl.dataset.x = 0;
-            tileEl.dataset.y = 0;
-            const panel = tileEl.querySelector(".tileSettingsPanel");
-            if (panel) panel.style.display = "none";
-            document.removeEventListener("pointerdown", exit);
-        }
-    };
-    document.addEventListener("pointerdown", exit);
+function applyEditModeVisuals() {
+  const tiles = document.querySelectorAll(".tile");
+  tiles.forEach(t => {
+    if (editMode) t.classList.add("editModeActive");
+    else t.classList.remove("editModeActive");
+  });
+  if (editMode) {
+    editBar.classList.add("visible");
+  } else {
+    editBar.classList.remove("visible");
+  }
 }
+editDoneBtn.addEventListener("click", () => setEditMode(false));
+editSettingsBtn.addEventListener("click", () => {
+  alert("Global settings drawer not wired yet; per-tile settings via each tile gear.");
+});
 
-/* ===== DRAG / REORDER (Interact.js) ===== */
-function setupDragForTiles() {
-    if (!window.interact) return;
+/* Long press on empty canvas to enter edit */
+(function setupCanvasLongPress() {
+  const canvas = document.getElementById("canvas");
+  let timer = null;
+  let startTarget = null;
 
-    interact(".tile").draggable({
-        listeners: {
-            start (event) {
-                const el = event.target;
-                if (!el.classList.contains("editing") || state.lockTiles) {
-                    event.interaction.stop();
-                    return;
-                }
-                el.style.zIndex = 10;
-                el.dataset.x = 0;
-                el.dataset.y = 0;
-            },
-            move (event) {
-                const el = event.target;
-                if (!el.classList.contains("editing") || state.lockTiles) return;
-                const x = (parseFloat(el.dataset.x) || 0) + event.dx;
-                const y = (parseFloat(el.dataset.y) || 0) + event.dy;
-                el.style.transform = `translate(${x}px, ${y}px) scale(1.03)`;
-                el.dataset.x = x;
-                el.dataset.y = y;
-            },
-            end (event) {
-                const el = event.target;
-                if (!el.classList.contains("editing") || state.lockTiles) {
-                    el.style.transform = "";
-                    el.style.zIndex = "";
-                    return;
-                }
+  function startPress(e) {
+    // only if background
+    if (e.target !== canvas) return;
+    if (timer) clearTimeout(timer);
+    startTarget = e.target;
+    timer = setTimeout(() => {
+      setEditMode(true);
+      timer = null;
+    }, EDIT_LONGPRESS_MS);
+  }
+  function endPress() {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
 
-                const container = document.getElementById("tilesArea");
-                const tilesEls = Array.from(container.querySelectorAll(".tile"));
-                const draggedId = el.dataset.id;
-                const draggedRect = el.getBoundingClientRect();
-                const dx = parseFloat(el.dataset.x) || 0;
-                const dy = parseFloat(el.dataset.y) || 0;
-                const cx = draggedRect.left + draggedRect.width / 2 + dx;
-                const cy = draggedRect.top + draggedRect.height / 2 + dy;
+  canvas.addEventListener("pointerdown", startPress);
+  canvas.addEventListener("pointerup", endPress);
+  canvas.addEventListener("pointerleave", endPress);
+})();
 
-                let closestEl = null;
-                let closestDist = Infinity;
+/* Drag & reorder */
+function setupTileDrag(tileEl, dragHandle, tileCfg) {
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let startOrder = tileCfg.order;
 
-                tilesEls.forEach(te => {
-                    if (te === el) return;
-                    const r = te.getBoundingClientRect();
-                    const c2x = r.left + r.width / 2;
-                    const c2y = r.top + r.height / 2;
-                    const d = (c2x - cx) ** 2 + (c2y - cy) ** 2;
-                    if (d < closestDist) {
-                        closestDist = d;
-                        closestEl = te;
-                    }
-                });
+  const canvas = document.getElementById("canvas");
 
-                if (closestEl) {
-                    const draggedCfg = state.tiles[draggedId];
-                    const otherId = closestEl.dataset.id;
-                    const otherCfg = state.tiles[otherId];
-                    if (draggedCfg && otherCfg) {
-                        const tmp = draggedCfg.order;
-                        draggedCfg.order = otherCfg.order;
-                        otherCfg.order = tmp;
-                        saveState();
-                    }
-                }
+  function onPointerDown(e) {
+    if (!editMode) return;
+    if (e.target !== dragHandle) return;
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    tileEl.style.zIndex = 10;
+    tileEl.style.transition = "none";
 
-                el.style.transform = "";
-                el.style.zIndex = "";
-                renderTiles();
-            }
-        }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    tileEl.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+
+  function onPointerUp(e) {
+    if (!dragging) return;
+    dragging = false;
+    tileEl.style.zIndex = "";
+    tileEl.style.transition = "";
+
+    const rect = tileEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    let closest = null;
+    let closestDist = Infinity;
+    const tilesDom = Array.from(canvas.querySelectorAll(".tile"));
+    tilesDom.forEach(domTile => {
+      if (domTile === tileEl) return;
+      const r = domTile.getBoundingClientRect();
+      const tx = r.left + r.width / 2;
+      const ty = r.top + r.height / 2;
+      const d = (tx - cx) ** 2 + (ty - cy) ** 2;
+      if (d < closestDist) {
+        closestDist = d;
+        closest = domTile;
+      }
     });
+
+    tileEl.style.transform = "";
+    if (closest) {
+      const otherId = closest.dataset.id;
+      const otherCfg = getTile(otherId);
+      const myOrder = tileCfg.order;
+      tileCfg.order = otherCfg.order;
+      otherCfg.order = myOrder;
+      saveState();
+      renderAllTiles();
+    }
+
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+  }
+
+  dragHandle.addEventListener("pointerdown", onPointerDown);
 }
 
-/* ===== INIT ===== */
+/* Resize (grid-span based) */
+function setupTileResize(tileEl, resizeHandle, tileCfg) {
+  let resizing = false;
+  let startX = 0;
+  let startY = 0;
+  let startColSpan = tileCfg.colSpan;
+  let startRowSpan = tileCfg.rowSpan;
+
+  function onPointerDown(e) {
+    if (!editMode) return;
+    e.preventDefault();
+    resizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startColSpan = tileCfg.colSpan;
+    startRowSpan = tileCfg.rowSpan;
+    tileEl.style.transition = "none";
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!resizing) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    const canvas = document.getElementById("canvas");
+    const canvasWidth = canvas.clientWidth;
+    const colCount = getComputedStyle(canvas)
+      .gridTemplateColumns.split(" ").length;
+    const colWidth = (canvasWidth - (colCount - 1) * 10) / colCount;
+    const rowHeight = parseFloat(getComputedStyle(canvas).gridAutoRows);
+
+    let newColSpan = Math.max(1, Math.round(startColSpan + dx / colWidth));
+    let newRowSpan = Math.max(1, Math.round(startRowSpan + dy / rowHeight));
+
+    newColSpan = Math.min(Math.max(1, newColSpan), colCount);
+    newRowSpan = Math.min(Math.max(1, newRowSpan), 4);
+
+    tileCfg.colSpan = newColSpan;
+    tileCfg.rowSpan = newRowSpan;
+    tileEl.style.gridColumn = "span " + newColSpan;
+    tileEl.style.gridRow = "span " + newRowSpan;
+  }
+
+  function onPointerUp() {
+    if (!resizing) return;
+    resizing = false;
+    tileEl.style.transition = "";
+    saveState();
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+  }
+
+  resizeHandle.addEventListener("pointerdown", onPointerDown);
+}
+
+/* ========= INIT ========= */
 state = loadState();
-applyGlobalState();
-
-loadScheduleIntoDOM();
-setInterval(loadScheduleIntoDOM, 1000 * 60 * 15);
-
-if (state.tiles.speed.enabled) {
-    setInterval(() => {
-        if (!state.tiles.speed.enabled) return;
-        runPingForTile();
-        runSpeedTestForTile();
-    }, (state.tiles.speed.config.autoIntervalSec || 120) * 1000);
-}
+renderAllTiles();
+updateClock();
+ensureLocationAndWeather();
+setInterval(() => {
+  ensureLocationAndWeather();
+}, 1000 * 60 * 5);
 </script>
 
 </body>
